@@ -1,0 +1,18 @@
+# artefatti di compilazione LaTeX
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.log
+*.lot
+*.out
+*.synctex.gz
+*.toc
+
+# il PDF lo produce la CI, non lo si versiona
+tesi.pdf
+
+# copie di lavoro
+*.bak-*

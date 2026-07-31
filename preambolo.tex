@@ -1,0 +1,123 @@
+% ======================================================================
+%  Preambolo — modello di tesi DISI (cartabinaria/latex-thesis) più i
+%  pacchetti e le macro proprie di questo lavoro.
+%  https://github.com/cartabinaria/latex-thesis
+% ======================================================================
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+% Gabbia piu' larga del modello, ma il margine INTERNO resta 3,5 cm come da
+% modello: e' quello che la rilegatura mangia, e ridurlo si vedrebbe sul lato
+% cucito. Si guadagna spazio sull'esterno (2,5 -> 2 cm) e soprattutto in
+% verticale, che il modello non fissa affatto e lasciava al default di
+% geometry, circa 4,5 cm per lato su A4.
+\usepackage[a4paper,inner=3.5cm,outer=2cm,top=2.5cm,bottom=2.5cm]{geometry}
+
+\usepackage[titletoc,title,toc,page]{appendix}
+\usepackage{verbatim}
+\usepackage{placeins}
+\usepackage{listings}
+\lstdefinestyle{kairos}{
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\bfseries,
+  commentstyle=\itshape\color{gray!60!black},
+  morecomment=[l]{//},
+  morekeywords={procedure,local,delocal,call,uncall,if,then,else,fi,from,do,
+                loop,until,par,and,rap,try,rollback,yrt,int,stack,channel,
+                push,pop,ssend,srecv,show,empty,nil},
+  columns=fullflexible, breaklines=true, showstringspaces=false,
+  frame=leftline, framesep=6pt, rulecolor=\color{gray!40}, xleftmargin=8pt,
+}
+\lstset{style=kairos}
+\usepackage[italian]{babel}
+\usepackage{tikz}
+\usepackage{parskip}
+
+\usepackage{graphicx}
+\usepackage{chngcntr}
+\counterwithin{table}{chapter}
+
+\usepackage{fancyhdr}
+\usepackage{indentfirst}
+\usepackage{float}
+\usepackage{soul}
+\usepackage[font=footnotesize,labelfont=bf]{caption}
+
+\usepackage{multirow}
+\usepackage{hyphenat}
+% Solo parole senza lettere accentate: \hyphenation non le accetta con
+% questo inputenc.
+\hyphenation{mate-mati-ca recu-perare con-cor-ren-za sin-cro-niz-za-zio-ne
+             se-man-ti-ca in-ver-sio-ne}
+
+\usepackage{lscape}
+
+% Ultima risorsa di TeX prima di far sporgere una riga nel margine: le concede
+% un po' di elasticita' in piu' sugli spazi. Serve dove una formula in linea
+% lunga non ha punti di a-capo legali.
+\setlength{\emergencystretch}{3em}
+
+% ---- aggiunte a questo lavoro rispetto al modello -----------------------
+% Il modello non le carica perché non prevede contenuto matematico.
+\usepackage{amsmath,amssymb}
+\usepackage{array}          % colonne >{$}l<{$} nel quadro riassuntivo
+\usepackage{xcolor}         % \static, \dynamic, \segnaposto
+% ------------------------------------------------------------------------
+
+\usepackage{natbib}
+\bibliographystyle{alpha}
+\setcitestyle{super,open={[},close={]}}
+
+\newcommand{\rom}[1]{\uppercase\expandafter{\romannumeral #1\relax}}
+
+\usepackage{pdfpages}
+
+% hyperref e cleveref vanno per ultimi, in quest'ordine.
+\usepackage{hyperref}
+\hypersetup{colorlinks=true,urlcolor=blue!55!black,linkcolor=blue!55!black,
+            citecolor=blue!55!black}
+\usepackage[capitalize,noabbrev]{cleveref}
+
+% ======================================================================
+%  Notazione propria
+% ======================================================================
+
+% ATTENZIONE -- ordine degli argomenti di \cfg.
+% Gli argomenti sono, per ragioni storiche, (comando, store): \cfg{c}{\sigma}.
+% L'output reso è invece (store, comando): <sigma, c>, per allinearsi alla
+% semantica di base [LamiLaneseStefani2024], che scrive <sigma, s>.
+% Il corpo della macro scambia quindi #1 e #2. NON riscrivere i ~100 siti di
+% chiamata: si cambia solo qui.
+\newcommand{\cfg}[2]{\langle #2,\, #1 \rangle}          % argomenti (c,sigma) -> reso <sigma, c>
+\newcommand{\upd}[3]{#1[#2 \mapsto #3]}                 % sigma[v -> n]
+\newcommand{\toe}{\to_e}
+\newcommand{\tob}{\to_b}
+\newcommand{\toc}{\to_c}
+\newcommand{\ttt}{\mathit{tt}}
+\newcommand{\ff}{\mathit{ff}}
+% L'esito d'errore è \bot, come nella semantica di base [LamiLaneseStefani2024].
+% La macro \err è mantenuta (ridefinita) per non toccare i ~50 siti di chiamata.
+\newcommand{\err}{\bot}
+\newcommand{\xor}{\oplus}
+\newcommand{\Inv}[1]{\mathcal{I}(#1)}
+\newcommand{\Store}{\mathit{Store}}
+
+% nome regola a destra
+\newcommand{\rname}[1]{\quad(\textsc{#1})}
+% regola d'errore a runtime (fa parte di ->_c, produce err)
+\newcommand{\rnameerr}[1]{\quad(\textcolor{red!60!black}{\textsc{#1}})}
+% Vincoli di buona formazione: stanno fuori dalla relazione ->_c, e si
+% distinguono per QUANDO li si verifica.
+%   \static  (verde)   verificato sul testo del programma, in compilazione
+%   \dynamic (arancio) sorvegliato durante l'esecuzione; violarlo da' \err
+\newcommand{\static}[1]{\textcolor{green!40!black}{#1}}
+\newcommand{\dynamic}[1]{\textcolor{orange!80!black}{#1}}
+
+% ---- segnaposto ----
+% Capitoli ancora da scrivere: resi in grigio, titolo e corpo, per essere
+% immediatamente riconoscibili come tali.
+% Identificatori e frammenti di codice nel testo corrente.
+\newcommand{\code}[1]{\texttt{#1}}
+
+\newcommand{\segnaposto}[1]{\textcolor{gray}{#1}}
+\newenvironment{segnapostotesto}{\color{gray}\itshape}{}

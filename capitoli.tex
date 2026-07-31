@@ -1,0 +1,2123 @@
+
+% ======================================================================
+\chapter{Introduzione}
+\label{sec:intro}
+% ======================================================================
+
+Un linguaggio di programmazione è \textbf{reversibile} quando ogni sua
+computazione può essere ripercorsa all'indietro fino a ritrovare esattamente lo
+stato di partenza. Non si tratta di registrare una traccia da cui ricostruire il
+passato: in un linguaggio reversibile l'informazione necessaria a tornare
+indietro è già contenuta nello stato corrente, perché ogni costrutto è
+progettato per non distruggerla. L'assegnamento distruttivo $x := e$, che
+cancella il valore precedente di $x$, non appartiene a un linguaggio di questo
+tipo; al suo posto compaiono aggiornamenti invertibili come $x \mathrel{+}= e$,
+il cui inverso $x \mathrel{-}= e$ è immediato.
+
+L'interesse per questo modo di calcolare ha tre radici indipendenti. La prima è
+fisica: il principio di Landauer lega la cancellazione di un bit a una
+dissipazione minima di energia, e un calcolo che non cancella può in linea di
+principio evitarla. La seconda è pragmatica: molti problemi si presentano
+naturalmente in coppie di trasformazioni inverse (compressione e
+decompressione, codifica e decodifica, serializzazione e parsing) e un
+linguaggio reversibile permette di scrivere \emph{un solo} programma invece di
+due, eliminando per costruzione la possibilità che le due metà divergano. La
+terza riguarda l'affidabilità: poter tornare indietro è il meccanismo di base
+del \emph{recovery}, e infatti il \emph{rollback} di una transazione non è altro
+che esecuzione all'indietro fino a un punto sicuro.
+
+\medskip
+\noindent
+È proprio la terza radice a rendere interessante il caso \textbf{concorrente},
+ed è qui che si colloca questo lavoro. In un sistema sequenziale l'esecuzione
+all'indietro è una nozione semplice, perché c'è un solo passato da ripercorrere.
+In presenza di più thread il passato non è più lineare: due rami che procedono
+in parallelo possono aver interagito, e disfare un passo di uno può richiedere
+di disfare prima i passi dell'altro che ne dipendono. Il capostipite dei
+linguaggi reversibili, \textbf{Janus}~\cite{YokoyamaGluck2007}, è puramente
+sequenziale; la reversibilità in contesto concorrente è stata studiata
+soprattutto su calcoli di processi~\cite{LaneseMezzinaSchmittStefani2011,%
+LaneseLienhardtMezzinaSchmittStefani2013}, che sono modelli e non linguaggi di
+programmazione. Il territorio in mezzo (un linguaggio imperativo strutturato,
+con la sintassi e i costrutti che un programmatore si aspetta, che sia insieme
+reversibile e concorrente) è poco popolato: i tentativi esistono, ma finora
+hanno definito i costrutti concorrenti attraverso la loro traduzione, senza una
+semantica formale su cui poggiare le proprietà che ci si aspetta da un
+linguaggio reversibile.
+
+\medskip
+\noindent
+\textbf{Kairos} sta in quel territorio. Al nucleo di Janus (assegnamenti
+invertibili, condizionali a doppia guardia, cicli \texttt{from\,\dots\,until},
+procedure invocabili con \texttt{call} e \texttt{uncall}) aggiunge il
+parallelismo esplicito \texttt{par\,\dots\,and\,\dots\,rap}, la comunicazione
+sincrona su canali tipizzati \texttt{ssend}/\texttt{srecv}, uno stack come
+struttura dati primitiva e le transazioni \texttt{try\,\dots\,rollback\,\dots\,yrt}.
+La scelta di progetto che tiene insieme il tutto è la \emph{disgiunzione}: rami
+paralleli operano su porzioni disgiunte dello store e comunicano solo per
+canali. Da questa singola ipotesi discende la confluenza degli interleaving che
+non toccano canali (\S\ref{sec:par-conf}), e quindi il fatto che il
+non-determinismo residuo non sia osservabile sullo store finale: la
+concorrenza di Kairos serve a esprimere il parallelismo dei problemi, non a
+introdurre corse critiche.
+
+\medskip
+\noindent
+Il contributo di questo documento è la semantica formale del linguaggio.
+Diamo una semantica operazionale strutturale in stile small-step, definita come
+\textbf{estensione} della semantica di Janus di Lami, Lanese e
+Stefani~\cite{LamiLaneseStefani2024}: ereditiamo da quella base la forma dei
+giudizi, i contesti di valutazione, la configurazione terminale e il
+trattamento degli errori, e aggiungiamo le regole per i costrutti che Kairos
+introduce. Definiamo poi l'operatore di inversione $\Inv{\cdot}$, sintattico e
+calcolabile in tempo lineare, e mostriamo in che senso realizza l'esecuzione
+all'indietro.
+
+\section{Notazione e convenzioni}
+\label{sec:notazione}
+
+I giudizi hanno la forma $\cfg{c}{\sigma} \to \cfg{c'}{\sigma'}$, con lo store a
+sinistra come nella semantica di base, non il turnstile big-step
+$\sigma \vdash e \Downarrow v$ usuale nella letteratura su Janus. Non è una
+variante stilistica: interleaving dei rami e sincronizzazione sui canali
+(\cref{sec:par}) si esprimono molto più naturalmente passo per passo, perché un
+big-step collassa l'intera esecuzione di un comando in un unico giudizio e i
+punti in cui intercalare l'altro ramo restano impliciti. È la stessa motivazione
+dichiarata in~\cite{LamiLaneseStefani2024}, che adotta lo small-step per Janus
+proprio in vista di una futura estensione concorrente.
+
+Una convenzione tipografica riguarda ciò che sta \emph{fuori} dalla relazione di
+transizione. Le regole d'errore, che producono $\err$, portano il nome in
+\textcolor{red!60!black}{rosso}. I vincoli di buona formazione sono distinti
+secondo il momento in cui li si verifica: \static{in verde} quelli controllati
+sul testo del programma, prima di eseguirlo; \dynamic{in arancio} quelli
+sorvegliati durante l'esecuzione, perché riguardano stato che il testo del
+programma non determina.
+
+\section{Struttura della tesi}
+
+Il \cref{chap:background} richiama Janus, la semantica small-step su cui ci
+basiamo e i lavori sulla reversibilità concorrente. Il \cref{chap:semantica} è
+il nucleo tecnico: sintassi astratta, sistema di transizione, il confine fra ciò
+che è ereditato dalla base e ciò che Kairos aggiunge, e le regole di riduzione
+dagli assegnamenti fino a \texttt{par} e alle transazioni, con gli errori a
+runtime. Il \cref{chap:reversibilita} definisce l'operatore di inversione, ne
+dimostra le proprietà e riassume in un quadro unico tutte le regole. Seguono il
+\cref{chap:programmare} sull'uso del linguaggio, il \cref{chap:interprete}
+sull'implementazione, il \cref{chap:correlati} sul confronto con i lavori
+esistenti e il \cref{chap:conclusioni} con le conclusioni.
+
+% ======================================================================
+\chapter{Background}
+\label{chap:background}
+\label{sec:back}
+% ======================================================================
+
+\subsubsection{Janus e la programmazione reversibile}
+
+\textbf{Janus} è stato definito nel 1982 da Lutz e Derby come esercizio
+didattico e riportato all'attenzione della comunità da Yokoyama e
+Glück~\cite{YokoyamaGluck2007}, che ne hanno dato la prima semantica formale e
+un self-interpreter invertibile. È un linguaggio imperativo strutturato in cui
+ogni costrutto è invertibile per costruzione, secondo due idee ricorrenti.
+
+La prima è l'\textbf{aggiornamento invertibile}. Al posto dell'assegnamento
+distruttivo Janus ha solo aggiornamenti della forma $x \mathrel{\odot}= e$ con
+$\odot \in \{+,-,\hat{\ }\}$, dove $x$ non compare in $e$: il vecchio valore di
+$x$ è recuperabile dal nuovo applicando l'operazione inversa, e la condizione
+sull'occorrenza di $x$ garantisce che il valore di $e$ sia lo stesso prima e
+dopo il passo.
+
+La seconda è la \textbf{doppia guardia}. Un condizionale irreversibile
+$\mathtt{if}\ e\ \mathtt{then}\ c_1\ \mathtt{else}\ c_2$ non è invertibile
+perché, arrivati alla fine, non si sa più quale ramo sia stato preso. Janus
+richiede allora una seconda espressione, l'\emph{asserzione} in coda:
+\[
+\mathtt{if}\ e_1\ \mathtt{then}\ c_1\ \mathtt{else}\ c_2\ \mathtt{fi}\ e_2 ,
+\]
+con l'obbligo che $e_2$ valga vero all'uscita se e solo se si è preso il ramo
+\texttt{then}. All'indietro è $e_2$ a decidere il ramo ed $e_1$ a fare da
+asserzione: il ruolo delle due espressioni si scambia. Lo stesso schema governa
+il ciclo
+\[
+\mathtt{from}\ e_1\ \mathtt{do}\ c_1\ \mathtt{loop}\ c_2\ \mathtt{until}\ e_2 ,
+\]
+dove $e_1$ deve valere solo alla prima iterazione ed $e_2$ solo all'ultima, così
+che la condizione di ingresso all'indietro sia $e_2$ e quella di uscita $e_1$.
+I due corpi sono eseguiti secondo la traccia $c_1\,[\,c_2\ c_1\,]^{*}$: $c_1$
+porta avanti il lavoro dell'iterazione, $c_2$ fa avanzare il contatore fra
+un'iterazione e la successiva. Kairos adotta la stessa forma; il ciclo a un
+corpo solo ne è il caso particolare $c_2 = \mathtt{skip}$.
+
+Su queste basi Janus è \emph{r-Turing completo}: calcola esattamente le funzioni
+iniettive computabili, senza generare spazzatura. Le sue procedure si invocano
+con \texttt{call} in avanti e \texttt{uncall} all'indietro, e l'inverso di un
+programma si ottiene per trasformazione puramente sintattica.
+
+\subsubsection{Una semantica small-step per Janus}
+
+Le presentazioni classiche di Janus, a partire da~\cite{YokoyamaGluck2007},
+usano una semantica \emph{big-step}: un giudizio $\sigma \vdash c \Downarrow
+\sigma'$ mette in relazione lo store prima e dopo l'esecuzione \emph{completa}
+di $c$. È una scelta comoda per un linguaggio sequenziale, ma collassa in un
+unico passo l'intera computazione, e con essa i punti in cui un'altra
+esecuzione potrebbe intercalarsi.
+
+Lami, Lanese e Stefani~\cite{LamiLaneseStefani2024} hanno dato una semantica
+\textbf{small-step} di Janus, con giudizi della forma $\langle \sigma, c\rangle
+\to \langle \sigma', c'\rangle$ fra configurazioni, contesti di valutazione per
+espressioni e comandi, configurazione terminale $\langle \sigma,
+\mathtt{skip}\rangle$ ed errori segnalati da un esito distinto $\bot$. Uno degli
+scopi dichiarati di quel lavoro è proprio predisporre il terreno per estensioni
+concorrenti, sulle quali le proprietà di interesse si definiscono più
+agevolmente in forma small-step. Kairos parte da lì: adottarne le convenzioni
+significa che le scelte di presentazione sono già state fatte e argomentate a
+monte, e che le regole nuove sono solo quelle dei costrutti nuovi. La
+\S\ref{sec:base} elenca esattamente il confine fra le due cose.
+
+Una semantica alternativa per Janus, in stile \emph{reversible}, è quella di
+Lanese e Vidal~\cite{LaneseVidal2026}, in cui le regole in avanti e quelle
+all'indietro sono date insieme sullo stesso sistema di transizione anziché
+derivare le seconde da un inverter sintattico.
+
+\subsubsection{Reversibilità e concorrenza}
+
+Fuori dai linguaggi imperativi, la reversibilità in presenza di concorrenza è
+stata studiata a fondo sui \emph{calcoli di processi}. Il punto delicato è che
+in un sistema concorrente non esiste un unico ordine di esecuzione da
+rovesciare: la nozione corretta è la \emph{reversibilità causalmente
+consistente}, per cui un passo può essere disfatto solo dopo che sono stati
+disfatti tutti i passi che da esso dipendono causalmente. In quest'ottica la
+reversibilità va anche \emph{controllata}, perché tornare indietro senza limiti
+non è utile a nulla: in $\rho\pi$ e in
+croll-$\pi$~\cite{LaneseMezzinaSchmittStefani2011,%
+LaneseLienhardtMezzinaSchmittStefani2013} il ritorno all'indietro è governato da
+primitive esplicite, e il meccanismo che ne risulta (si torna indietro fino a
+un punto scelto e da lì si prosegue diversamente) è esattamente quello delle
+transazioni con compensazione. Le transazioni
+\texttt{try\,\dots\,rollback\,\dots\,yrt} di Kairos (\S\ref{sec:try}) sono la
+versione a linguaggio di programmazione della stessa idea.
+
+Kairos adotta però una strada più restrittiva, e per questo più semplice: rami
+paralleli lavorano su porzioni \emph{disgiunte} dello store e interagiscono
+soltanto per comunicazione sincrona. Non c'è memoria condivisa, quindi non c'è
+dipendenza causale da tracciare fra passi che non comunicano, e la consistenza
+causale si riduce alla confluenza dimostrata in \S\ref{sec:par-conf}. Il prezzo
+è che alcuni schemi di programmazione a memoria condivisa non sono esprimibili;
+il guadagno è che nessun programma Kairos ben tipato può contenere una corsa
+critica.
+
+Fra i calcoli di processo e i linguaggi di programmazione esiste comunque un
+precedente diretto: Janus è già stato esteso con un costrutto di composizione
+parallela e uno scambio di messaggi, e l'estensione è stata realizzata con un
+compilatore verso C++~\cite{Sammarchi2019}. Quel lavoro definisce i costrutti
+attraverso il codice in cui vengono tradotti, non attraverso regole di
+riduzione, e mantiene uno stato condiviso fra i rami; è quindi il punto di
+partenza più vicino a quello di questa tesi, e il \cref{chap:correlati} lo
+riprende per un confronto puntuale.
+
+\subsubsection{Canali e tipi di sessione}
+
+La comunicazione di Kairos avviene su canali \emph{sincroni} e \emph{tipizzati},
+con il vincolo che ogni canale abbia in ogni istante al più due titolari, una
+\emph{sessione binaria}. È una restrizione che viene dalla teoria dei
+\textbf{tipi di sessione}~\cite{HondaVasconcelosKubo1998,%
+HondaYoshidaCarbone2008}, dove il tipo di un canale non descrive solo i dati
+scambiati ma la \emph{sequenza} degli scambi, e i tipi dei due estremi devono
+essere duali. In Kairos il vincolo di sessione binaria serve a garantire che il
+partner di ogni comunicazione sia determinato: senza
+di esso un $\mathtt{ssend}$ potrebbe sincronizzarsi con più $\mathtt{srecv}$
+diversi, e la scelta sarebbe un non-determinismo osservabile sullo store, in
+contrasto con la confluenza.
+
+Il vincolo ha due forme, e la scelta fra le due non è di dettaglio. Nella forma
+\emph{statica} un canale appartiene agli stessi due rami per tutta la sua vita,
+e questo si legge dal testo del programma. Nella forma \emph{dinamica} un canale
+può stare prima fra due rami e poi fra altri due, purché il primo titolare
+smetta di usarlo prima che il nuovo cominci: è ciò che nella teoria dei tipi di
+sessione si chiama \textbf{delega}, il meccanismo con cui, in stile
+$\pi$-calcolo, un processo passa a un terzo il canale su cui sta parlando. La
+seconda è strettamente più espressiva, e Kairos adotta quella: il vincolo è
+sorvegliato osservando l'esecuzione (\S\ref{sec:chan}), non leggendo il testo del
+programma, perché il testo non basta a seguire un canale che cambia titolare.
+
+\medskip
+\noindent
+Va detto dove sta il confine di questo lavoro. Il vincolo di sessione binaria e
+l'ipotesi di disgiunzione sono qui \emph{assunzioni} sotto cui vale la
+confluenza, non un sistema di tipi: la semantica delle
+\S\S\ref{sec:esp}--\ref{sec:cmd} non impedisce di scrivere un programma con una
+corsa critica, si limita a non garantire nulla su di esso. La separazione è
+deliberata e segue la pratica corrente, in cui il calcolo si definisce senza
+preoccuparsi delle corse e un sistema di tipi sovrapposto le esclude; i tipi di
+sessione, binari o multiparty, sono precisamente una famiglia di sistemi di tipi
+di questo genere. In \S\ref{sec:chan} diamo la disciplina binaria per i canali di
+Kairos, delega compresa, e i tipi di sessione che ne descrivono il protocollo:
+i tipi non si dichiarano ma si ricostruiscono dal programma, e i due estremi di
+ogni canale devono risultare duali. Restano fuori la scelta etichettata e i
+protocolli a più di due partecipanti, estensioni possibili che qui non
+perseguiamo.
+
+% ======================================================================
+\chapter{Kairos: sintassi e semantica operazionale}
+\label{chap:semantica}
+
+\section{Sintassi astratta}
+\label{sec:sintassi}
+% ======================================================================
+
+Insiemi di base: numeri interi $m \in \mathbb{Z}$, variabili $v \in \mathit{Var}$.
+Categorie derivate:
+
+\paragraph{Espressioni aritmetiche $e \in \mathit{Exp}$.}
+\begin{align*}
+e ::= m \mid v \mid e + e \mid e - e
+\end{align*}
+
+\paragraph{Condizioni $b \in \mathit{Cond}$.}
+\begin{align*}
+b ::= e = e \mid e \neq e \mid e \geq e \mid e \leq e \mid e > e \mid e < e
+\end{align*}
+
+\paragraph{Comandi $c \in \mathit{Com}$.}
+\begin{align*}
+c ::={}& \mathtt{skip} && \text{(comando vuoto)}\\
+   \mid{}& v \mathbin{+\!\!=} e \mid v \mathbin{-\!\!=} e \mid v \mathbin{\hat{}\!=} e \mid v \mathbin{<\!=\!>} v && \text{(assegnamenti reversibili)}\\
+   \mid{}& \mathtt{local}\ v = m \mid \mathtt{delocal}\ v = m && \text{(scope)}\\
+   \mid{}& c\ ;\ c && \text{(sequenza)}\\
+   \mid{}& \mathtt{if}\ b\ \mathtt{then}\ c\ \mathtt{else}\ c\ \mathtt{fi}\ b' && \text{(condizionale)}\\
+   \mid{}& \begin{array}[t]{@{}l@{}}\mathtt{from}\ b_1\ \mathtt{do}\ c_1\\ \quad\mathtt{loop}\ c_2\ \mathtt{until}\ b_2\end{array} && \text{(ciclo)}\\
+   \mid{}& \mathtt{call}\ f(\bar v) \mid \mathtt{uncall}\ f(\bar v) && \text{(chiamata / inversa)}\\
+   \mid{}& \mathtt{push}(v,s) \mid \mathtt{pop}(v,s) && \text{(stack)}\\
+   \mid{}& \mathtt{ssend}(\langle \bar v \rangle, \mathit{ch}) \mid \mathtt{srecv}(\langle \bar v \rangle, \mathit{ch}) && \text{(canali)}\\
+   \mid{}& \mathtt{par}\ c\ \mathtt{and}\ c\ [\mathtt{and}\ c]^{*}\ \mathtt{rap} && \text{(parallelo)}\\
+   \mid{}& \mathtt{try}\ b\ c\ [\mathtt{rollback}\ c]\ \mathtt{yrt}\ b' && \text{(commit / rollback)}
+\end{align*}
+
+\noindent
+Un \emph{programma} è una lista di procedure
+$\mathtt{procedure}\ f(\bar v)\ \{\, c \,\}$; $\bar v$ è la lista (eventualmente
+vuota) dei parametri. La sequenza è scritta con il punto e virgola esplicito,
+$c_1\,;\,c_2$, come nelle regole di \S\ref{sec:seq}. Il condizionale ha
+\textbf{due} guardie ($b$ d'ingresso, $b'$ d'uscita) e il ciclo pure ($b_1$
+d'ingresso, $b_2$ d'uscita): è ciò che rende il linguaggio reversibile
+(\S\ref{sec:rev}). Un programma ben formato soddisfa inoltre due vincoli: su
+$\mathtt{par}$, ogni canale usato al suo interno è condiviso da esattamente
+due rami concorrenti (\S\ref{sec:chan}); su $\mathtt{try}\ldots
+\mathtt{rollback}\ldots\mathtt{yrt}$, né il corpo $c$ né il corpo di
+rollback $r$ possono contenere $\mathtt{ssend}$/$\mathtt{srecv}$, né
+direttamente né tramite $\mathtt{call}$/$\mathtt{uncall}$
+(\S\ref{sec:try}).
+
+% ======================================================================
+\section{Sistema di transizione e store}
+\label{sec:store}
+% ======================================================================
+
+Un sistema di transizione è una tripla $\langle \Gamma, \top, \to \rangle$ con
+$\Gamma$ insieme degli stati, $\top \subseteq \Gamma$ stati terminali,
+${\to} \subseteq \Gamma \times \Gamma$ relazione di transizione. $\to^*$ è la
+sua chiusura riflessiva e transitiva:
+\[
+\dfrac{}{y \to^* y}
+\qquad
+\dfrac{y \to^* y' \quad y' \to y''}{y \to^* y''}
+\]
+
+\noindent
+Per dare significato alle variabili introduciamo uno \textbf{store}. In Kairos
+le variabili sono di tre tipi: \texttt{int} (interi), \texttt{stack} (sequenze di
+interi) e \texttt{channel} (canali: nomi di sincronizzazione tra rami
+paralleli). Un canale \textbf{non} contiene valori: è un punto di
+rendez-vous, non un contenitore (\S\ref{sec:chan}), a differenza di
+\texttt{stack}, un canale allocato mantiene sempre la stessa identità per
+tutta la sua vita, e $\sigma(\mathit{ch})$ non compare mai
+nell'aggiornamento di una regola. Indicando con $\mathit{Chan}$ l'insieme
+(opaco) delle identità di canale, lo store è
+\[
+\sigma : \mathit{Var} \rightharpoonup \mathbb{Z} \cup \mathbb{Z}^{*} \cup \mathit{Chan},
+\]
+parziale perché lo scope cambia con \texttt{local}/\texttt{delocal}. Per le
+sequenze: $\varepsilon$ è la vuota, $n : \ell$ è il \emph{cons} (la testa $n$
+è la cima dello stack). Scriviamo $\upd{\sigma}{v}{w}$ per l'aggiornamento e
+$\sigma \setminus v$ per la rimozione di $v$ dal dominio. $\varepsilon$ denota
+qui \textbf{solo} la sequenza vuota di uno \texttt{stack}: è un valore, non un
+comando. Il comando vuoto è un simbolo distinto, $\mathtt{skip}$
+(\S\ref{sec:sintassi}, \S\ref{sec:seq}), le due nozioni non vanno confuse.
+
+% ======================================================================
+\section{La semantica di base}
+\label{sec:base}
+% ======================================================================
+
+Kairos non viene definito da zero. La sua semantica è data come
+\textbf{estensione} della semantica operazionale small-step di Janus di Lami,
+Lanese e Stefani~\cite{LamiLaneseStefani2024}: da lì ereditiamo la forma del
+giudizio, la configurazione terminale, il trattamento degli errori e
+l'apparato dei contesti di valutazione; a quella base aggiungiamo i costrutti
+che Janus non ha. Le scelte di progetto già compiute in quel lavoro non
+vengono quindi ridiscusse qui: dove questo documento tace, vale la convenzione
+della base. Nel seguito chiamiamo \emph{la base} quella semantica, e
+segnaliamo esplicitamente ogni punto in cui ce ne discostiamo.
+
+\paragraph{Giudizio.} Le regole hanno la forma
+\[
+\cfg{c}{\sigma} \to \cfg{c'}{\sigma'}
+\qquad\text{oppure}\qquad
+\cfg{c}{\sigma} \to \bot ,
+\]
+dove la seconda denota un \textbf{errore a runtime} dovuto al fallimento di
+un'asserzione. Lo store sta a \emph{sinistra} del comando, come nella base.
+La base usa un'unica relazione $\to$ su tutte le categorie sintattiche; qui
+manteniamo la decorazione $\toe$ / $\tob$ / $\toc$ per distinguere il
+frammento delle espressioni, quello delle condizioni e quello dei comandi,
+ma si tratta della stessa relazione letta su categorie diverse.
+
+\paragraph{Configurazione terminale.} Nella base la computazione termina in
+$\cfg{\mathtt{skip}}{\sigma}$, e per questo \emph{non} esiste una regola per
+$\mathtt{skip}$: citando~\cite{LamiLaneseStefani2024}, \emph{``there is no
+rule for \textup{\texttt{skip}}, since $\langle \sigma, \mathtt{skip}\rangle$
+denotes the end of the computation''}. È la convenzione standard, e la
+adottiamo: ogni regola che porta a termine un comando conclude in
+$\cfg{\mathtt{skip}}{\sigma}$.
+
+\medskip
+\noindent
+\textbf{Configurazione terminale.} La convenzione è adottata
+\emph{ovunque} in questo documento: ogni regola che porta a termine un comando
+conclude in $\cfg{\mathtt{skip}}{\sigma}$, non nello store nudo. Non esiste
+quindi una regola per $\mathtt{skip}$; il consumo di $\mathtt{skip}$ in
+sequenza è affidato a \textsc{SeqS} (\S\ref{sec:seq}), e la terminazione di un
+ramo parallelo a \textsc{Par-L0}/\textsc{Par-R0} (\S\ref{sec:par}).
+
+\paragraph{Errori.} L'esito d'errore è $\bot$, un elemento distinto da ogni
+configurazione. Un errore non viene propagato da una regola per ciascun
+costrutto, ma da un'unica regola contestuale \textsc{CtxError} (sotto): è la
+scelta della base, e sostituisce le regole di propagazione ad hoc.
+
+\paragraph{Contesti di valutazione.} Per dare una definizione compatta della
+semantica, la base solleva la riduzione di sotto-termini tramite
+\emph{contesti di valutazione}: un contesto è un comando in cui un
+sotto-termine è sostituito da un buco $\bullet$. Si distinguono i contesti
+d'\textbf{espressione} $C_e[\bullet]$, il cui buco va riempito con
+un'espressione o una condizione, e i contesti di \textbf{comando}
+$C_s[\bullet]$, il cui buco va riempito con un comando; $C_e[e]$ e $C_s[c]$
+denotano il comando ottenuto sostituendo $\bullet$ rispettivamente con $e$ e
+con $c$. Adattati a Kairos, i contesti sono
+{\footnotesize
+\[
+\begin{aligned}
+C_e[\bullet] ::={}&
+  v \mathbin{+\!\!=} \bullet \mid v \mathbin{-\!\!=} \bullet \mid v \mathbin{\hat{}\!=} \bullet
+  && \text{(\S\ref{sec:assign})}\\
+ \mid{}& \mathtt{if}\ \bullet\ \mathtt{then}\ c_1\ \mathtt{else}\ c_2\ \mathtt{fi}\ b_2
+  && \text{(\S\ref{sec:if})}\\
+ \mid{}& \mathtt{if}\ \ttt\ \mathtt{then}\ \mathtt{skip}\ \mathtt{else}\ c_2\ \mathtt{fi}\ \bullet
+  \mid \mathtt{if}\ \ff\ \mathtt{then}\ c_1\ \mathtt{else}\ \mathtt{skip}\ \mathtt{fi}\ \bullet & \\
+ \mid{}& ((\bullet,b_1),\, c_1,\, b_2,\, c_2)
+  \mid (b_1,\, (\mathtt{skip},c_1),\, (\bullet,b_2),\, c_2)
+  && \text{(\S\ref{sec:loop})}\\
+ \mid{}& ((\bullet,b_1),\, (\mathtt{skip},c_1),\, b_2,\, (\mathtt{skip},c_2)) & \\[0.4em]
+C_s[\bullet] ::={}& \bullet\,;\,c
+  && \text{(\S\ref{sec:seq})}\\
+ \mid{}& \mathtt{if}\ \ttt\ \mathtt{then}\ \bullet\ \mathtt{else}\ c_2\ \mathtt{fi}\ b_2
+  \mid \mathtt{if}\ \ff\ \mathtt{then}\ c_1\ \mathtt{else}\ \bullet\ \mathtt{fi}\ b_2
+  && \text{(\S\ref{sec:if})}\\
+ \mid{}& (b_1,\, (\bullet,c_1),\, (b_2,b_2),\, c_2)
+  \mid ((b_1,b_1),\, (\mathtt{skip},c_1),\, b_2,\, (\bullet,c_2))
+  && \text{(\S\ref{sec:loop})}\\
+ \mid{}& \mathtt{par}\ \bullet\ \mathtt{and}\ c\ \mathtt{rap}
+  \mid \mathtt{par}\ c\ \mathtt{and}\ \bullet\ \mathtt{rap}
+  && \text{(\S\ref{sec:par}, propria di Kairos)}
+\end{aligned}
+\]
+}
+Le clausole con le quadruple appartengono al ciclo e sono spiegate in
+\S\ref{sec:loop}; quelle di $\mathtt{par}$ sono l'unica aggiunta di Kairos,
+e sono discusse in \S\ref{sec:par}. Non c'è una clausola per
+$\mathtt{try}$: le sue regole (\S\ref{sec:try}) riducono il corpo con
+$\toc^{*}$ in una premessa, non in posizione, quindi il corpo non è un buco
+di contesto. Le tre regole contestuali sono quelle della base:
+\[
+\dfrac{\cfg{e}{\sigma} \toe \cfg{e'}{\sigma}}
+      {\cfg{C_e[e]}{\sigma} \toc \cfg{C_e[e']}{\sigma}} \rname{CtxExp}
+\qquad
+\dfrac{\cfg{c}{\sigma} \toc \cfg{c'}{\sigma'}}
+      {\cfg{C_s[c]}{\sigma} \toc \cfg{C_s[c']}{\sigma'}} \rname{CtxStmt}
+\]
+\[
+\dfrac{\cfg{c}{\sigma} \toc \bot}
+      {\cfg{C_s[c]}{\sigma} \toc \bot} \rnameerr{CtxError}
+\]
+\textsc{CtxExp} e \textsc{CtxStmt} sollevano un passo riuscito,
+\textsc{CtxError} solleva un errore. Le stesse regole valgono per una
+condizione al posto di un'espressione, sostituendo $\toe$ con $\tob$: nella
+base gli operatori relazionali sono operatori binari come gli altri e non
+esiste una categoria separata (\S\ref{sec:esp}). Applicandole ripetutamente si
+attraversa un annidamento di contesti di profondità qualunque.
+
+\medskip
+\noindent
+Queste tre regole rendono superflue tutte le regole di congruenza e di
+propagazione dell'errore scritte una per costrutto: \textsc{Seq1}
+(\S\ref{sec:seq}) è \textsc{CtxStmt} istanziata su $C_s[\bullet] =
+\bullet\,;\,c$, \textsc{Par-L}/\textsc{Par-R} (\S\ref{sec:par}) sono
+\textsc{CtxStmt} istanziata sulle due posizioni del $\mathtt{par}$, e
+\textsc{CtxError} rende superflua ogni regola di
+propagazione dell'errore dedicata a un singolo costrutto (\S\ref{sec:err}).
+Le istanze di contesto le manteniamo scritte per esteso dove aiutano la
+lettura, segnalando di volta in volta che sono istanze e non regole
+indipendenti.
+
+% ----------------------------------------------------------------------
+\subsubsection*{Che cosa aggiunge Kairos}
+% ----------------------------------------------------------------------
+
+Quanto segue è il \textbf{contributo di questa tesi}: sono i costrutti e i
+vincoli che la base non ha e che vengono definiti qui per la prima volta sopra
+di essa. La base è esplicita sui propri limiti:
+\emph{``In this paper, we do not consider parameters or local
+variables''}~\cite{LamiLaneseStefani2024}. Kairos estende dunque quella
+semantica su sette fronti:
+
+\begin{enumerate}
+\item \textbf{Variabili locali}: $\mathtt{local}$ / $\mathtt{delocal}$
+  (\S\ref{sec:scope}), assenti dalla base.
+\item \textbf{Parametri di procedura}: $\mathtt{call}\ f(\bar v)$ /
+  $\mathtt{uncall}\ f(\bar v)$ (\S\ref{sec:call}); la base ha solo
+  $\mathtt{call}\ \mathit{id}$ senza parametri, e passa i valori per effetto
+  collaterale sullo store globale.
+\item \textbf{Stack}: $\mathtt{push}$ / $\mathtt{pop}$ con la convenzione
+  \emph{zero-cleared} (\S\ref{sec:stack}); la base ha array $x[e]$, non stack.
+\item \textbf{Canali}: $\mathtt{ssend}$ / $\mathtt{srecv}$ con
+  \textbf{transizioni etichettate} (\S\ref{sec:chan}).
+\item \textbf{Composizione parallela}: $\mathtt{par}\ldots\mathtt{and}\ldots
+  \mathtt{rap}$, con interleaving e sincronizzazione \textsc{Par-Comm}
+  (\S\ref{sec:par}).
+\item \textbf{Transazioni}: $\mathtt{try}\ldots\mathtt{rollback}\ldots
+  \mathtt{yrt}$ (\S\ref{sec:try}).
+\item \textbf{Sessione binaria} sui canali come proprietà dinamica, delega
+  compresa (\S\ref{sec:chan}), con le proprietà che ne discendono: confluenza
+  (\S\ref{sec:par}) e reversibilità estesa al caso $\mathtt{par}$
+  (\S\ref{sec:rev}).
+\end{enumerate}
+
+\noindent
+La base è sequenziale, ma adotta lo small-step \emph{proprio in vista} di
+un'estensione concorrente: i punti 4--7 sono l'estensione che quella scelta
+rendeva possibile.
+
+% ======================================================================
+\section{Espressioni e condizioni}
+\label{sec:esp}
+% ======================================================================
+
+Adottiamo \textbf{senza modifiche} la semantica small-step delle espressioni
+della base (\cite{LamiLaneseStefani2024}, Fig.~5): il giudizio
+$\cfg{e}{\sigma} \toe \cfg{e'}{\sigma}$ non tocca mai lo store e riduce
+costanti (\textsc{ConS}), variabili (\textsc{VarS}) e operatori binari
+(\textsc{Bop1}--\textsc{Bop3}) con strategia interna sinistra. Come nella
+base, la sintassi di espressioni e condizioni è \emph{estesa con i valori come
+foglie}, così che un termine parzialmente valutato resti un termine: è ciò
+che permette ai contesti $C_e[\bullet]$ (\S\ref{sec:base}) di sollevarne la
+riduzione.
+
+\medskip
+\noindent
+Le \textbf{condizioni} non sono una categoria separata nella base: gli
+operatori relazionali ($=,\neq,\geq,\leq,>,<$) sono già fra i suoi operatori
+binari $\odot$, e non richiedono quindi regole proprie. Manteniamo per
+leggibilità la decorazione $\tob$ per la riduzione di una condizione, i cui
+valori sono $\ttt$ (vero) e $\ff$ (falso), dove la base usa i predicati
+$\mathsf{is\_true?}(v)$ e $\mathsf{is\_false?}(v)$ su un valore qualunque.
+
+\medskip
+\noindent
+Poiché $\toe$ e $\tob$ sono deterministiche e non modificano lo store, si ha
+$\cfg{e}{\sigma} \toe^{*} \cfg{m}{\sigma}$ con $m$ unico e
+$\cfg{b}{\sigma} \tob^{*} \cfg{\beta}{\sigma}$ con $\beta \in \{\ttt,\ff\}$
+unico; scriviamo $\mathit{eval}(e,\sigma) = m$ e
+$\mathit{eval}_b(b,\sigma) = \beta$. In Kairos $\mathtt{push}$ e
+$\mathtt{pop}$ restano \textbf{fuori} dalle espressioni
+(\S\ref{sec:stack}): le espressioni non hanno effetti collaterali, e la loro
+valutazione resta perciò esattamente quella della base.
+
+% ======================================================================
+\section{Semantica dei comandi ($\toc$)}
+\label{sec:cmd}
+% ======================================================================
+
+$\Gamma_c = \{\cfg{c}{\sigma}\} \cup \{\bot\}$, terminali
+$\top_c = \{\cfg{\mathtt{skip}}{\sigma}\} \cup \{\bot\}$: come nella semantica
+di base (\S\ref{sec:base}), una configurazione \emph{terminale} è
+$\cfg{\mathtt{skip}}{\sigma}$: non esiste alcuna regola per $\mathtt{skip}$,
+perché $\cfg{\mathtt{skip}}{\sigma}$ \emph{è} la fine della computazione.
+
+\subsubsection{Sequenza}
+\label{sec:seq}
+$\mathtt{skip}$ è il comando vuoto e, da solo, è la configurazione
+terminale: non ha regole. Non va confuso con $\varepsilon$
+(\S\ref{sec:store}), che è la sequenza vuota di uno \texttt{stack}, un
+\emph{valore}, non un comando. In sequenza, $\mathtt{skip}$ viene consumato
+dalla regola \textsc{SeqS} della base:
+\[
+\dfrac{\cfg{c_1}{\sigma} \toc \cfg{c_1'}{\sigma'}}
+      {\cfg{c_1\,;\,c_2}{\sigma} \toc \cfg{c_1'\,;\,c_2}{\sigma'}} \rname{Seq1}
+\qquad
+\dfrac{}{\cfg{\mathtt{skip}\,;\,c_2}{\sigma} \toc \cfg{c_2}{\sigma}} \rname{SeqS}
+\]
+\[
+\dfrac{\cfg{c_1}{\sigma} \xrightarrow{\ \alpha\ } \cfg{c_1'}{\sigma}}
+      {\cfg{c_1\,;\,c_2}{\sigma} \xrightarrow{\ \alpha\ } \cfg{c_1'\,;\,c_2}{\sigma}} \rname{Seq-Lbl}
+\]
+\textsc{Seq1} è \textsc{CtxStmt} (\S\ref{sec:base}) istanziata sul contesto
+$C_s[\bullet] = \bullet\,;\,c$: la riportiamo per esteso solo per leggibilità.
+\textsc{SeqS} non è invece un'istanza di contesto: è la regola della base che
+consuma un $\mathtt{skip}$ già raggiunto e fa avanzare la sequenza al comando
+successivo (\S\ref{sec:base}). \textsc{Seq-Lbl}
+solleva un passo \textbf{etichettato} (\S\ref{sec:chan}) di $c_1$ nella
+sequenza, per un'etichetta $\alpha$ generica: serve perché \textsc{CtxStmt}
+solleva solo passi $\toc$ non etichettati, ed è ciò che permette a un
+$\mathtt{ssend}/\mathtt{srecv}$ seguito da altro codice (l'idioma normale,
+non solo un canale da solo nel corpo di una procedura), di offrirsi comunque
+come partner in \textsc{Par-Comm} (\S\ref{sec:par}). Non serve invece alcuna
+regola d'errore per la sequenza: un $\err$ prodotto da $c_1$ risale grazie a
+\textcolor{red!60!black}{\textsc{CtxError}} sullo stesso contesto
+$\bullet\,;\,c$ (\S\ref{sec:err}).
+
+\subsubsection{Assegnamenti reversibili}
+\label{sec:assign}
+\static{Vincolo (verificato staticamente): la variabile aggiornata non compare
+a destra ($v \notin e$)}, così l'operazione è iniettiva.
+\[
+\dfrac{\cfg{e}{\sigma} \toe \cfg{e'}{\sigma}}
+      {\cfg{v \mathbin{+\!\!=} e}{\sigma} \toc \cfg{v \mathbin{+\!\!=} e'}{\sigma}} \rname{Add1}
+\]
+\[
+\dfrac{}{\cfg{v \mathbin{+\!\!=} m}{\sigma} \toc \cfg{\mathtt{skip}}{\upd{\sigma}{v}{\sigma(v)+m}}} \rname{Add2}
+\]
+\[
+\dfrac{\cfg{e}{\sigma} \toe \cfg{e'}{\sigma}}
+      {\cfg{v \mathbin{-\!\!=} e}{\sigma} \toc \cfg{v \mathbin{-\!\!=} e'}{\sigma}} \rname{Sub1}
+\]
+\[
+\dfrac{}{\cfg{v \mathbin{-\!\!=} m}{\sigma} \toc \cfg{\mathtt{skip}}{\upd{\sigma}{v}{\sigma(v)-m}}} \rname{Sub2}
+\]
+\[
+\dfrac{\cfg{e}{\sigma} \toe \cfg{e'}{\sigma}}
+      {\cfg{v \mathbin{\hat{}\!=} e}{\sigma} \toc \cfg{v \mathbin{\hat{}\!=} e'}{\sigma}} \rname{Xor1}
+\]
+\[
+\dfrac{}{\cfg{v \mathbin{\hat{}\!=} m}{\sigma} \toc \cfg{\mathtt{skip}}{\upd{\sigma}{v}{\sigma(v)\xor m}}} \rname{Xor2}
+\]
+\[
+\dfrac{}{\cfg{v_1 \mathbin{<\!=\!>} v_2}{\sigma} \toc \cfg{\mathtt{skip}}{\upd{\upd{\sigma}{v_1}{\sigma(v_2)}}{v_2}{\sigma(v_1)}}} \rname{Swap}
+\]
+
+\subsubsection{Scope: \texttt{local} / \texttt{delocal}}
+\label{sec:scope}
+\texttt{local}\ alloca $v$ con valore $m$; \texttt{delocal}\ \emph{verifica} che
+$v$ valga ancora $m$ e poi lo rimuove (l'asserzione rende l'operazione
+invertibile).
+\[
+\dfrac{v \notin \mathrm{dom}(\sigma)}
+      {\cfg{\mathtt{local}\ v = m}{\sigma} \toc \cfg{\mathtt{skip}}{\upd{\sigma}{v}{m}}} \rname{Local}
+\]
+\[
+\dfrac{\sigma(v) = m}
+      {\cfg{\mathtt{delocal}\ v = m}{\sigma} \toc \cfg{\mathtt{skip}}{\sigma \setminus v}} \rname{Deloc}
+\]
+\[
+\dfrac{v \in \mathrm{dom}(\sigma)}
+      {\cfg{\mathtt{local}\ v = m}{\sigma} \toc \err} \rnameerr{Local-Err}
+\]
+\[
+\dfrac{v \notin \mathrm{dom}(\sigma) \ \lor\ \sigma(v) \neq m}
+      {\cfg{\mathtt{delocal}\ v = m}{\sigma} \toc \err} \rnameerr{Deloc-Err}
+\]
+Un'unica
+sottigliezza propria di \textcolor{red!60!black}{\textsc{Deloc-Err}}: se $v \notin \mathrm{dom}(\sigma)$,
+$\sigma(v)$ non è definito e non si può confrontare con $m$: la premessa
+copre esplicitamente anche questo caso, non solo $\sigma(v) \neq m$.
+
+\subsubsection{Condizionale (doppia guardia)}
+\label{sec:if}
+La guardia d'uscita $b'$ deve essere coerente col ramo: \emph{vera} dopo
+\texttt{then}, \emph{falsa} dopo \texttt{else}. Adottiamo le quattro regole
+della base (\cite{LamiLaneseStefani2024}, Fig.~8), che \textbf{non} usano
+alcun comando ausiliario $\mathtt{assert}$: la guardia d'uscita si valuta
+\emph{nel contesto}, in posizione, e il confronto fra il valore del test e
+quello dell'asserzione decide fra passo riuscito ed errore.
+
+\medskip
+\noindent
+Le regole si applicano quindi a un condizionale già ridotto: \textsc{CtxExp}
+(\S\ref{sec:base}) ha portato il test a un valore, \textsc{CtxStmt} ha ridotto
+a $\mathtt{skip}$ il ramo selezionato, e \textsc{CtxExp} ha infine valutato
+l'asserzione. Le clausole di $C_e[\bullet]$ e $C_s[\bullet]$ per il
+condizionale sono esattamente le posizioni usate qui.
+\[
+\dfrac{}{\cfg{\mathtt{if}\ \ttt\ \mathtt{then}\ \mathtt{skip}\ \mathtt{else}\ c_e\ \mathtt{fi}\ \ttt}{\sigma}
+       \toc \cfg{\mathtt{skip}}{\sigma}} \rname{IfTrueEnd}
+\]
+\[
+\dfrac{}{\cfg{\mathtt{if}\ \ff\ \mathtt{then}\ c_t\ \mathtt{else}\ \mathtt{skip}\ \mathtt{fi}\ \ff}{\sigma}
+       \toc \cfg{\mathtt{skip}}{\sigma}} \rname{IfFalseEnd}
+\]
+\[
+\dfrac{}{\cfg{\mathtt{if}\ \ttt\ \mathtt{then}\ \mathtt{skip}\ \mathtt{else}\ c_e\ \mathtt{fi}\ \ff}{\sigma}
+       \toc \bot} \rnameerr{IfError1}
+\]
+\[
+\dfrac{}{\cfg{\mathtt{if}\ \ff\ \mathtt{then}\ c_t\ \mathtt{else}\ \mathtt{skip}\ \mathtt{fi}\ \ttt}{\sigma}
+       \toc \bot} \rnameerr{IfError2}
+\]
+Le prime due regole danno il passo riuscito quando test e asserzione hanno lo
+\emph{stesso} valore di verità (entrambi $\ttt$, caso \textsc{IfTrueEnd};
+entrambi $\ff$, caso \textsc{IfFalseEnd}); le altre due segnalano l'errore
+quando i due valori \emph{differiscono}. L'asserzione d'uscita non
+richiede quindi alcun comando ausiliario da eseguire in coda al ramo: viene
+valutata in posizione di contesto, come il test d'ingresso.%
+\footnote{Nella Fig.~8 di~\cite{LamiLaneseStefani2024} la regola
+\textsc{IfFalseEnd} è stampata con premessa $\mathsf{is\_true?}(v_2)$, il che
+la renderebbe identica a \textsc{IfError2}. Si tratta evidentemente di un
+refuso: il testo che accompagna la figura dice esplicitamente che le prime due
+regole coprono il caso in cui test e asserzione sono \emph{``either both true
+\textup{(\textsc{IfTrueEnd}} case\textup{)} or both false
+\textup{(\textsc{IfFalseEnd}} case\textup{)}''}. Qui riportiamo la versione
+corretta, con l'asserzione falsa.}
+
+\subsubsection{Ciclo \texttt{from\,\dots\,do\,\dots\,loop\,\dots\,until}}
+\label{sec:loop}
+Adottiamo il ciclo \textbf{a due corpi} della base, con le sue sette regole
+(\cite{LamiLaneseStefani2024}, Fig.~9): $b_1$ è l'asserzione d'ingresso (vera
+solo alla prima entrata), $c_1$ il \emph{do}-corpo, $c_2$ il \emph{loop}-corpo
+eseguito \emph{fra} un'iterazione e la successiva, $b_2$ il test d'uscita. La
+traccia d'esecuzione è $c_1\,[c_2\,c_1]^{*}$: $c_1$ gira $k$ volte e $c_2$
+gira $k-1$ volte.
+
+\medskip
+\noindent
+Come nella base, l'esecuzione usa un termine ausiliario a runtime, la
+\textbf{quadrupla} $(X_1, X_2, X_3, X_4)$, dove ciascuna componente è o il
+termine originale \emph{a riposo}, o una \emph{coppia}
+$(\text{corrente},\allowbreak\ \text{originale})$ che segna la componente come in corso di valutazione e ne
+conserva accanto l'originale, per poterlo riavviare all'iterazione seguente:
+\[
+\begin{array}{llll}
+X_1 ::= b_1 \mid (\beta, b_1) &
+X_2 ::= c_1 \mid (c, c_1) &
+X_3 ::= b_2 \mid (\beta, b_2) &
+X_4 ::= c_2 \mid (c, c_2)
+\end{array}
+\]
+con $\beta$ un reduct di una condizione. La distinzione fra forma nuda e forma
+a coppia è ciò che rende le regole \textbf{mutuamente esclusive}: p.es.\
+\textsc{LoopExp1T} si applica quando $X_2$ e $X_4$ sono nudi (prima entrata),
+\textcolor{red!60!black}{\textsc{LoopError2}} quando sono coppie con corrente
+$\mathtt{skip}$ (fine di un'iterazione). Le riduzioni interne alla quadrupla
+sono sollevate dai contesti $C_e[\bullet]$ e $C_s[\bullet]$ di
+\S\ref{sec:base}, le cui clausole per il ciclo sono esattamente le posizioni
+usate qui.
+\[
+\dfrac{}{\cfg{\mathtt{from}\ b_1\ \mathtt{do}\ c_1\ \mathtt{loop}\ c_2\ \mathtt{until}\ b_2}{\sigma}
+       \toc \cfg{((b_1,b_1),\, c_1,\, b_2,\, c_2)}{\sigma}} \rname{LoopMainS}
+\]
+\[
+\dfrac{}{\cfg{((\ttt,b_1),\, c_1,\, b_2,\, c_2)}{\sigma}
+       \toc \cfg{(b_1,\, (c_1,c_1),\, (b_2,b_2),\, c_2)}{\sigma}} \rname{LoopExp1T}
+\]
+\[
+\dfrac{}{\cfg{(b_1,\, (\mathtt{skip},c_1),\, (\ttt,b_2),\, c_2)}{\sigma}
+       \toc \cfg{\mathtt{skip}}{\sigma}} \rname{LoopEndS}
+\]
+{\small
+\[
+\dfrac{}{\cfg{(b_1,\, (\mathtt{skip},c_1),\, (\ff,b_2),\, c_2)}{\sigma}
+       \toc \cfg{((b_1,b_1),\, (\mathtt{skip},c_1),\, b_2,\, (c_2,c_2))}{\sigma}} \rname{LoopExp2F}
+\]}
+{\small
+\[
+\dfrac{}{\cfg{((\ff,b_1),\, (\mathtt{skip},c_1),\, b_2,\, (\mathtt{skip},c_2))}{\sigma}
+       \toc \cfg{(b_1,\, (c_1,c_1),\, (b_2,b_2),\, c_2)}{\sigma}} \rname{LoopExp1F}
+\]}
+\[
+\dfrac{}{\cfg{((\ff,b_1),\, c_1,\, b_2,\, c_2)}{\sigma} \toc \bot} \rnameerr{LoopError1}
+\]
+\[
+\dfrac{}{\cfg{((\ttt,b_1),\, (\mathtt{skip},c_1),\, b_2,\, (\mathtt{skip},c_2))}{\sigma}
+       \toc \bot} \rnameerr{LoopError2}
+\]
+
+\noindent
+Il flusso è dunque: \textsc{LoopMainS} entra nel ciclo e arma la valutazione
+di $b_1$; \textsc{CtxExp} la porta a un valore, e \textsc{LoopExp1T} (che
+richiede $b_1$ \emph{vera}) avvia $c_1$ e arma $b_2$. L'esecuzione di $c_1$
+avviene tramite \textsc{CtxStmt}; quando $c_1$ è ridotto a $\mathtt{skip}$,
+\textsc{CtxExp} valuta $b_2$: se è vera \textsc{LoopEndS} termina il ciclo in
+$\cfg{\mathtt{skip}}{\sigma}$, se è falsa \textsc{LoopExp2F} avvia il
+\emph{loop}-corpo $c_2$ e riarma $b_1$. Terminato $c_2$, $b_1$ viene
+rivalutata e deve ora essere \emph{falsa}: \textsc{LoopExp1F} riavvia
+l'iterazione. Le due regole d'errore coprono i due casi in cui l'asserzione
+$b_1$ ha il valore sbagliato: \textcolor{red!60!black}{\textsc{LoopError1}}
+quando $b_1$ è falsa \emph{all'ingresso}, \textcolor{red!60!black}{\textsc{LoopError2}}
+quando $b_1$ ridiventa \emph{vera} a metà ciclo. Sono le uniche due regole
+d'errore del ciclo: ogni altro fallimento nel corpo risale per
+\textcolor{red!60!black}{\textsc{CtxError}}.
+
+\paragraph{Il ciclo di Janus.} Kairos adotta \emph{tal quale} il ciclo di
+Janus, nella forma e con le regole date dalla base~\cite{LamiLaneseStefani2024},
+a sua volta fedele all'originale di Yokoyama e Glück~\cite{YokoyamaGluck2007}.
+La forma a un solo corpo, $\mathtt{from}\ b_1\ \mathtt{loop}\ c\
+\mathtt{until}\ b_2$, ne è il caso particolare
+$c_2 = \mathtt{skip}$, cioè $\mathtt{from}\ b_1\ \mathtt{do}\ c\ \mathtt{loop}\
+\mathtt{skip}\ \mathtt{until}\ b_2$; con il secondo corpo si recupera l'idioma
+standard di Janus (il lavoro nel \emph{do}-corpo, l'avanzamento del contatore
+nel \emph{loop}-corpo), che con un corpo solo non era esprimibile
+direttamente.
+
+\subsubsection{Chiamata e inversa}
+\label{sec:call}
+Sia $\mathtt{procedure}\ f(\bar p)\ \{\, c_f \,\}$. La chiamata sostituisce i
+parametri formali $\bar p$ con gli attuali $\bar v$ (lo $\toc$ opera sulle celle
+del chiamante). $\mathtt{uncall}$ esegue il corpo \emph{invertito}
+$\Inv{c_f}$ (operatore $\Inv{\cdot}$, \S\ref{sec:rev}).
+\[
+\dfrac{}{\cfg{\mathtt{call}\ f(\bar v)}{\sigma} \toc \cfg{c_f[\bar v/\bar p]}{\sigma}} \rname{Call}
+\]
+\[
+\dfrac{}{\cfg{\mathtt{uncall}\ f(\bar v)}{\sigma} \toc \cfg{\Inv{c_f}[\bar v/\bar p]}{\sigma}} \rname{Uncall}
+\]
+
+\subsubsection{Stack}
+\label{sec:stack}
+$\mathtt{push}(v,s)$ sposta il valore di $v$ in cima a $s$ e \textbf{azzera} $v$;
+$\mathtt{pop}(v,s)$ fa il duale (estrae la cima e la mette in $v$), con la
+premessa \emph{zero-cleared}: il bersaglio deve essere già $0$.
+\[
+\dfrac{\sigma(v) = n}
+      {\cfg{\mathtt{push}(v,s)}{\sigma} \toc \cfg{\mathtt{skip}}{\upd{\upd{\sigma}{v}{0}}{s}{n : \sigma(s)}}} \rname{Push}
+\]
+\[
+\dfrac{\sigma(v) = 0 \quad \sigma(s) = n : \ell}
+      {\cfg{\mathtt{pop}(v,s)}{\sigma} \toc \cfg{\mathtt{skip}}{\upd{\upd{\sigma}{v}{n}}{s}{\ell}}} \rname{Pop}
+\]
+\[
+\dfrac{\sigma(v) = 0 \quad \sigma(s) = \varepsilon}
+      {\cfg{\mathtt{pop}(v,s)}{\sigma} \toc \err} \rnameerr{Pop-Err}
+\]
+\[
+\dfrac{\sigma(v) \neq 0}
+      {\cfg{\mathtt{pop}(v,s)}{\sigma} \toc \err} \rnameerr{Pop-Err2}
+\]
+Se $\sigma(v) \neq 0$, \textcolor{red!60!black}{\textsc{Pop-Err2}} dà $\err$.
+
+\subsubsection{Canali: \texttt{ssend} / \texttt{srecv}}
+\label{sec:chan}
+Un canale $\mathit{ch}$ \textbf{non} contiene valori: è un nome di
+sincronizzazione, un punto di rendez-vous tra i due rami che in quel momento
+ne sono titolari (vincolo di buona formazione, sotto). $\mathtt{ssend}$ e
+$\mathtt{srecv}$ non riducono in isolamento: ciascuno produce un passo
+\textbf{etichettato}, che si combina con quello del ramo partner nella
+regola \textsc{Par-Comm} (\S\ref{sec:par}) in un unico passo $\toc$ del
+\texttt{par} che li contiene, le etichette sono
+\[
+\alpha ::= \mathit{ch}!\langle \bar v,\bar n\rangle \mid \mathit{ch}?\langle \bar w\rangle
+\]
+($\mathit{ch}!\langle \bar v,\bar n\rangle$: offerta in invio, variabili
+$\bar v$ e valori correnti $\bar n$; $\mathit{ch}?\langle \bar w\rangle$:
+offerta in ricezione, variabili bersaglio $\bar w$). I passi etichettati non
+modificano da soli lo store, il movimento avviene tutto in
+\textsc{Par-Comm}:
+\[
+\dfrac{\sigma(v_1) = n_1 \quad \cdots \quad \sigma(v_k) = n_k}
+      {\cfg{\mathtt{ssend}(\langle \bar v \rangle, \mathit{ch})}{\sigma}
+       \xrightarrow{\ \mathit{ch}!\langle \bar v,\bar n\rangle\ } \cfg{\mathtt{skip}}{\sigma}} \rname{Ssend-Lbl}
+\]
+\[
+\dfrac{\sigma(w_1) = 0 \quad \cdots \quad \sigma(w_k) = 0}
+      {\cfg{\mathtt{srecv}(\langle \bar w \rangle, \mathit{ch})}{\sigma}
+       \xrightarrow{\ \mathit{ch}?\langle \bar w\rangle\ } \cfg{\mathtt{skip}}{\sigma}} \rname{Srecv-Lbl}
+\]
+\[
+\dfrac{\exists i.\ \sigma(w_i) \neq 0}
+      {\cfg{\mathtt{srecv}(\langle \bar w \rangle, \mathit{ch})}{\sigma} \toc \err} \rnameerr{Srecv-Err}
+\]
+\textcolor{red!60!black}{\textsc{Srecv-Err}} non è un passo etichettato: è una premessa su stato
+\textbf{locale} al ramo ricevente ($\sigma(\bar w) \neq \bar 0$), quindi
+produce $\err$ direttamente, senza
+attendere né dipendere da alcun partner, esattamente come
+\textcolor{red!60!black}{\textsc{Pop-Err2}}. \textsc{Ssend-Lbl} non ha un errore corrispondente:
+leggere $\sigma(\bar v)$ non ha precondizioni, può assumere qualunque valore.
+
+\medskip
+\noindent
+Il blocco è ora \textbf{emergente}, non il fallimento di una premessa
+condivisa: se nessun ramo concorrente offre l'etichetta duale, nessuna
+regola dell'intero sistema si applica a quella configurazione: non c'è una
+regola \textsc{Ssend}/\textsc{Srecv} "in isolamento" da cui una premessa
+possa mancare; semplicemente \textsc{Par-Comm} (\S\ref{sec:par}) non trova
+un match. La sincronizzazione stessa \emph{è} la premessa condivisa.
+
+\paragraph{Perché non serve una coda.} Un canale ha al più due titolari
+(vincolo di sessione binaria, sotto): in ogni istante c'è al più un
+$\mathtt{ssend}$ e un $\mathtt{srecv}$ in attesa sullo stesso canale, e
+\textsc{Par-Comm} li consuma insieme nello stesso passo. Non c'è mai più di
+un messaggio "in transito" da bufferizzare; se il canale è dentro un ciclo,
+questo si ripete a ogni iterazione, ma un invio/ricezione alla volta.
+
+\medskip
+\noindent
+La ragione \emph{decisiva}, però, non è il conteggio dei messaggi in transito:
+è l'\textbf{invertibilità}. Se un canale fosse una coda FIFO,
+$\mathtt{ssend}$ e $\mathtt{srecv}$ non potrebbero essere l'uno l'inverso
+dell'altro, perché agirebbero su \textbf{estremità opposte}: l'inverso di un
+accodamento in fondo è un'estrazione dal fondo, non la $\mathtt{srecv}$ che
+preleva dalla testa. Non è l'ordine in sé a rompere la simmetria: si veda
+$\mathtt{push}/\mathtt{pop}$ (\S\ref{sec:stack}), che operano su una struttura
+ordinata e restano una coppia inversa esatta proprio perché toccano
+\emph{entrambi} la cima. È l'asimmetria delle due estremità. Con un unico
+valore scambiato in rendez-vous il problema non si pone, e la dualità
+$\Inv{\mathtt{ssend}} = \mathtt{srecv}$ enunciata in \S\ref{sec:rev} vale
+esattamente, per la stessa convenzione \emph{zero-cleared} che regola
+$\mathtt{push}/\mathtt{pop}$. La rinuncia alla coda non è quindi una
+semplificazione di comodo, ma ciò che rende i due comandi una coppia inversa.
+
+\paragraph{Due garanzie, e due momenti in cui verificarle.} Su un canale servono
+due cose distinte: \emph{chi} può usarlo, e \emph{in che ordine} i due titolari
+lo usano. Nella teoria dei tipi di sessione le dà entrambe un unico sistema di
+tipi, statico. Qui le due sono separate, e non per comodità di esposizione: la
+prima riguarda una titolarità che \emph{cambia durante l'esecuzione}, perché un
+canale si può passare, e nessuna analisi del testo può seguirla; la seconda è
+invece una proprietà del testo del programma, e si controlla prima di eseguirlo.
+Da qui i due colori: la titolarità è \dynamic{sorvegliata a runtime}, il
+protocollo \static{verificato in compilazione}.
+
+\paragraph{\dynamic{Sessione binaria, come proprietà dinamica.}} Un canale ha,
+in ogni istante, \textbf{al più due} titolari: è una \emph{sessione binaria}.
+Non è richiesto un ruolo fisso (mittente o ricevente): i due titolari possono
+scambiarsi i ruoli nel tempo, perché con due soli titolari è sempre chiaro chi
+sia il partner di una data offerta $\mathit{ch}!$/$\mathit{ch}?$. È ciò che
+rende unico l'accoppiamento all'indietro (\S\ref{sec:rev}). Nella letteratura
+sui calcoli di processo è la condizione di linearità garantita dai \emph{session
+type} binari~\cite{HondaVasconcelosKubo1998}, di cui esiste la generalizzazione
+a più di due partecipanti (\emph{multiparty session
+types}~\cite{HondaYoshidaCarbone2008}).
+
+\medskip
+\noindent
+La titolarità è \textbf{stato d'esecuzione}, non una proprietà del testo del
+programma, e può cambiare durante l'esecuzione. Un ramo diventa titolare quando
+usa il canale o quando lo riceve come payload di un altro canale, e smette di
+esserlo quando lo spedisce a un terzo. Da questa sola regola discendono, senza
+casi particolari, i due modi in cui un canale si passa:
+
+\begin{itemize}
+\item \emph{name passing}, nello stile del $\pi$-calcolo: un ramo crea un canale
+privato, lo spedisce e continua a usarlo per ricevere la risposta. Cede la
+titolarità spedendolo e la riprende al primo uso successivo, così i titolari
+finiscono per essere mittente e destinatario.
+\item \emph{delega}: il canale è fra $A$ e $B$, $A$ lo passa a $C$ e smette di
+usarlo; i titolari diventano $B$ e $C$. Se $A$ lo riusasse sarebbe un terzo
+titolare, e viene fermato. La condizione classica della delega, \emph{chi cede
+smette di usarlo prima che il nuovo cominci}, non è qui un obbligo dichiarato a
+parte: è una conseguenza del contare al più due titolari alla volta.
+\end{itemize}
+
+\noindent
+La differenza rispetto alla forma \emph{statica} del vincolo, in cui un canale
+appartiene agli stessi due rami per tutta la vita, non è di comodo. Leggendo il
+testo del programma si può contare quanti rami \emph{nominano} un canale, ma non
+si può seguire un canale che cambia titolare, perché il nuovo titolare lo riceve
+sotto un altro nome, magari in un'altra procedura; l'analisi statica è costretta
+o a rifiutare la delega o a esentarla dal controllo. Osservando l'esecuzione la
+difficoltà non si presenta: l'identità di un canale è il canale stesso, non il
+nome della variabile che lo contiene.
+
+\medskip
+\noindent
+Il vincolo non fa parte della relazione di transizione: è una condizione
+sull'esecuzione, la cui violazione produce $\err$. Sono due i modi di violarla, e
+corrispondono ai due errori di \S\ref{sec:err}: un terzo ramo che tocca un canale
+già impegnato, e lo \emph{stallo}, cioè un ramo che attende un partner che non
+può più arrivare.
+
+\paragraph{\static{Tipi di sessione.}} Il vincolo appena dato dice \emph{quanti}
+rami toccano un canale, non \emph{come} lo usano: due rami che eseguono entrambi
+un $\mathtt{ssend}$ lo soddisfano, e restano bloccati per sempre. Un
+\textbf{tipo di sessione} descrive la sequenza degli scambi che un ramo compie
+su un canale:
+\[
+S ::= \mathtt{end} \mid\ !k.S \mid\ ?k.S \mid \mu X.S \mid X
+\]
+dove $k$ è il numero di interi scambiati in un passo. La \textbf{dualità}
+scambia le due direzioni e lascia il resto:
+\[
+\overline{\mathtt{end}} = \mathtt{end} \qquad
+\overline{!k.S} =\ ?k.\overline{S} \qquad
+\overline{?k.S} =\ !k.\overline{S} \qquad
+\overline{\mu X.S} = \mu X.\overline{S} \qquad
+\overline{X} = X
+\]
+Il tipo di un ramo si ricostruisce dal programma: $!k$ per un $\mathtt{ssend}$ di
+$k$ valori, $?k$ per un $\mathtt{srecv}$, concatenazione per la sequenza,
+$\mu X.S.X$ per un ciclo il cui corpo ha tipo $S$, e il tipo del corpo per una
+chiamata di procedura, con il canale sostituito al parametro formale. Due rami
+usano bene un canale quando i loro tipi sono duali, e la dualità è
+\textbf{invariante per inversione}: invertire un \texttt{par} scambia
+$\mathtt{ssend}$ e $\mathtt{srecv}$ in entrambi i rami (\S\ref{sec:rev}), cioè
+dualizza entrambi i tipi, e due tipi duali restano duali.
+
+\medskip
+\noindent
+Questo controllo non sostituisce quello dinamico e non lo duplica: riconosce in
+anticipo i conflitti già visibili nel testo, come due rami che offrono la stessa
+direzione o si scambiano quantità diverse di valori, che altrimenti si
+manifesterebbero solo come stallo a esecuzione avviata. Il frammento è minimo e va preso per quello
+che è: non c'è \emph{scelta etichettata}, quindi i due rami di un $\mathtt{if}$
+che comunichi devono compiere le stesse azioni sul canale, e non ci sono
+sessioni \emph{multiparty}. Dove il frammento non basta a descrivere l'uso di un
+canale, il tipo resta indeterminato e non si segnala nulla: si riconoscono i soli
+conflitti dimostrabili, mai rifiutando un programma corretto per insufficienza
+della descrizione.
+
+\subsubsection{Composizione parallela: \texttt{par\,\dots\,and\,\dots\,rap}}
+\label{sec:par}
+I rami procedono per \emph{interleaving} non deterministico (caso a due rami; con
+più \texttt{and} si generalizza). Un passo avanza il ramo sinistro o il destro:
+\[
+\dfrac{\cfg{c_1}{\sigma} \toc \cfg{c_1'}{\sigma'}}
+      {\cfg{\mathtt{par}\ c_1\ \mathtt{and}\ c_2\ \mathtt{rap}}{\sigma} \toc
+       \cfg{\mathtt{par}\ c_1'\ \mathtt{and}\ c_2\ \mathtt{rap}}{\sigma'}} \rname{Par-L}
+\]
+\[
+\dfrac{\cfg{c_2}{\sigma} \toc \cfg{c_2'}{\sigma'}}
+      {\cfg{\mathtt{par}\ c_1\ \mathtt{and}\ c_2\ \mathtt{rap}}{\sigma} \toc
+       \cfg{\mathtt{par}\ c_1\ \mathtt{and}\ c_2'\ \mathtt{rap}}{\sigma'}} \rname{Par-R}
+\]
+Quando un ramo termina (cioè è diventato $\mathtt{skip}$), lo si elimina
+dal blocco:
+\[
+\dfrac{}{\cfg{\mathtt{par}\ \mathtt{skip}\ \mathtt{and}\ c_2\ \mathtt{rap}}{\sigma} \toc
+       \cfg{c_2}{\sigma}} \rname{Par-L0}
+\]
+\[
+\dfrac{}{\cfg{\mathtt{par}\ c_1\ \mathtt{and}\ \mathtt{skip}\ \mathtt{rap}}{\sigma} \toc
+       \cfg{c_1}{\sigma}} \rname{Par-R0}
+\]
+(Quando resta un solo ramo, $\mathtt{par}\ c\ \mathtt{rap}$ si comporta come
+$c$.) \textsc{Par-L} e \textsc{Par-R} sono \textsc{CtxStmt} (\S\ref{sec:base})
+istanziata sulle due clausole $C_s[\bullet] = \mathtt{par}\ \bullet\
+\mathtt{and}\ c\ \mathtt{rap}$ e $\mathtt{par}\ c\ \mathtt{and}\ \bullet\
+\mathtt{rap}$: le riportiamo per esteso perché è qui che si vede
+l'interleaving, ma non sono regole indipendenti. \textsc{Par-L0}/\textsc{Par-R0}
+lo sono, perché riguardano la terminazione di un ramo. Se un ramo fallisce,
+l'intero blocco fallisce (un errore non è localizzabile a un solo ramo una
+volta che i rami condividono il blocco \texttt{par}), ma anche questo non
+richiede regole proprie: il fallimento di un ramo risale all'intero blocco
+per \textcolor{red!60!black}{\textsc{CtxError}} sulle stesse due clausole
+(\S\ref{sec:err}).
+
+\medskip
+\noindent
+\textsc{Par-L}/\textsc{Par-R} (e le varianti \textsc{-L0}/\textsc{-R0})
+sollevano un passo $\toc$ \textbf{ordinario} (non etichettato) di un solo
+ramo. Un $\mathtt{ssend}$/$\mathtt{srecv}$ non produce mai un passo $\toc$ da
+solo (\S\ref{sec:chan}), quindi queste regole non lo sollevano mai
+direttamente; ma se il ramo che lo contiene è a sua volta un \texttt{par}
+annidato, l'offerta deve poter risalire fino al livello dove si trova il suo
+partner. Due regole gemelle fanno da tramite, sollevando un passo
+\textbf{etichettato} anziché ordinario:
+\[
+\dfrac{\cfg{c_1}{\sigma} \xrightarrow{\ \alpha\ } \cfg{c_1'}{\sigma}}
+      {\cfg{\mathtt{par}\ c_1\ \mathtt{and}\ c_2\ \mathtt{rap}}{\sigma}
+       \xrightarrow{\ \alpha\ } \cfg{\mathtt{par}\ c_1'\ \mathtt{and}\ c_2\ \mathtt{rap}}{\sigma}} \rname{Par-L-Lbl}
+\]
+\[
+\dfrac{\cfg{c_2}{\sigma} \xrightarrow{\ \alpha\ } \cfg{c_2'}{\sigma}}
+      {\cfg{\mathtt{par}\ c_1\ \mathtt{and}\ c_2\ \mathtt{rap}}{\sigma}
+       \xrightarrow{\ \alpha\ } \cfg{\mathtt{par}\ c_1\ \mathtt{and}\ c_2'\ \mathtt{rap}}{\sigma}} \rname{Par-R-Lbl}
+\]
+Con queste, un'offerta di canale generata da \textsc{Ssend-Lbl}/
+\textsc{Srecv-Lbl} in fondo a un \texttt{par} annidato risale, un livello di
+nesting alla volta, fino al primo livello in cui trova un ramo gemello con
+l'offerta duale sullo stesso canale, esattamente lo stile standard alla
+CCS. La sincronizzazione vera e propria resta un'unica regola, applicata al
+livello dove le due offerte sono gemelle:
+\[
+\dfrac{\cfg{c_1}{\sigma} \xrightarrow{\ \mathit{ch}!\langle \bar v,\bar n\rangle\ } \cfg{c_1'}{\sigma}
+       \qquad
+       \cfg{c_2}{\sigma} \xrightarrow{\ \mathit{ch}?\langle \bar w\rangle\ } \cfg{c_2'}{\sigma}}
+      {\cfg{\mathtt{par}\ c_1\ \mathtt{and}\ c_2\ \mathtt{rap}}{\sigma} \toc
+       \cfg{\mathtt{par}\ c_1'\ \mathtt{and}\ c_2'\ \mathtt{rap}}{\upd{\upd{\sigma}{\bar v}{\bar 0}}{\bar w}{\bar n}}}
+      \rname{Par-Comm}
+\]
+(simmetrica in $c_1,c_2$: si applica anche scambiando quale dei due offre
+$\mathit{ch}!$ e quale $\mathit{ch}?$; con più di due \texttt{and} si applica
+alla coppia di rami che offre le etichette duali). Il canale $\mathit{ch}$
+compare solo per far combaciare le due etichette: \textbf{non} compare
+nell'aggiornamento dello store, che tocca solo $\bar v$ (azzerate) e $\bar w$
+(riempite con $\bar n$), è il passo congiunto descritto in
+\S\ref{sec:chan}. \textsc{Par-Comm} produce un passo $\toc$ ordinario (non
+etichettato): una volta sincronizzato, il risultato non deve risalire
+oltre, è \emph{questo} passo, non l'offerta grezza, che \textsc{Par-L}/
+\textsc{Par-R} sollevano ai livelli ancora più esterni.
+
+\paragraph{\textsc{Par-L-Lbl}/\textsc{Par-R-Lbl} non aprono un instradamento
+sbagliato.} Sollevare un'etichetta attraverso un \texttt{par} annidato
+potrebbe in linea di principio farla incontrare un partner diverso da quello
+inteso, se sullo stesso canale ci fossero più di due offerte possibili in
+giro per l'albero dei \texttt{par}. Ma il vincolo di sessione binaria
+(\S\ref{sec:chan}), \dynamic{sorvegliato durante l'esecuzione}, garantisce
+che in ogni istante siano \textbf{al più due} i rami (a qualunque profondità di
+nesting) titolari di un dato canale, e quindi al più due quelli che possono
+offrire un'etichetta su di esso:
+\textsc{Par-Comm} confronta le etichette per \emph{nome di canale}, quindi se
+solo due rami possono mai offrirne una su $\mathit{ch}$, non c'è un terzo
+candidato con cui una $\mathtt{Par}$-\textsc{Lbl} possa accoppiarla per
+errore, qualunque cammino di risalita la porti a incontrare l'altra offerta
+su $\mathit{ch}$, è per forza quella giusta. Il controllo statico
+(implementato in \texttt{parser.py}, non riportato qui) conta esattamente
+questo: le foglie concorrenti (i rami che restano dopo aver scomposto
+ricorsivamente ogni \texttt{par} annidato nei suoi stessi rami, non i soli
+rami immediati) che toccano ciascun canale, indipendentemente da quanto in
+profondità si trovino; è la stessa nozione di "ramo" che qui risale con
+\textsc{Par-L-Lbl}/\textsc{Par-R-Lbl}.
+
+\medskip
+\noindent
+Con \texttt{par} la relazione $\toc$ \textbf{non} è più deterministica: l'ordine
+d'interleaving non è fissato. Tuttavia i rami \textbf{non condividono memoria}:
+ciascuno opera su una porzione \emph{disgiunta} dello store (variabili
+\texttt{int}/\texttt{stack} proprie). L'\textbf{unica} forma di
+comunicazione/sincronizzazione tra rami passa per i canali, tramite
+\textsc{Par-Comm}. Grazie a questa disgiunzione, i diversi interleaving che non
+toccano canali producono lo stesso store finale (confluenza).
+
+\paragraph{Perché vale la confluenza.}
+\label{sec:par-conf}
+Siano $\cfg{\mathtt{par}\ c_1\
+\mathtt{and}\ c_2\ \mathtt{rap}}{\sigma} \toc \cfg{\mathtt{par}\ c_1'\
+\mathtt{and}\ c_2\ \mathtt{rap}}{\sigma_1}$ (via \textsc{Par-L}) e
+$\cfg{\mathtt{par}\ c_1\ \mathtt{and}\ c_2\ \mathtt{rap}}{\sigma} \toc
+\cfg{\mathtt{par}\ c_1\ \mathtt{and}\ c_2'\ \mathtt{rap}}{\sigma_2}$ (via
+\textsc{Par-R}) i due passi abilitati in $\sigma$, nessuno dei due un
+$\mathtt{ssend}/\mathtt{srecv}$ (nessun tocco a canali). Poiché $c_1$ legge e
+scrive solo le proprie variabili \texttt{int}/\texttt{stack} e $c_2$ solo le
+proprie, e questi due insiemi sono disgiunti, l'aggiornamento di $\sigma$
+compiuto dal passo di $c_1$ e quello compiuto dal passo di $c_2$ agiscono su
+porzioni disgiunte del dominio: sono \emph{indipendenti} e commutano.
+Applicando prima l'uno e poi l'altro (in un ordine o nell'altro) si ottiene
+quindi lo stesso $\sigma_{12}$, con $\cfg{\mathtt{par}\ c_1'\ \mathtt{and}\
+c_2\ \mathtt{rap}}{\sigma_1} \toc \cfg{\mathtt{par}\ c_1'\ \mathtt{and}\
+c_2'\ \mathtt{rap}}{\sigma_{12}}$ e simmetricamente da $\sigma_2$: un
+diamante di confluenza locale. Estendendo per induzione sulla lunghezza della
+derivazione (ogni permutazione di passi indipendenti è una sequenza di
+scambi adiacenti di questo tipo) si ottiene che due interleaving qualunque
+che non toccano canali portano allo stesso store finale. La clausola è
+necessaria: un passo \textsc{Par-Comm} coinvolge \textbf{entrambi} i rami
+contemporaneamente (\S\ref{sec:par}), non un passo di solo $c_1$ sollevato da
+\textsc{Par-L} indipendentemente da un passo di solo $c_2$, non c'è quindi
+un passo-di-$c_1$ e un passo-di-$c_2$ separati da far commutare, ce n'è uno
+solo che li consuma entrambi in un colpo; non rientra nel caso trattato qui.
+(\S\ref{sec:rev} tratta l'argomento, analogo ma non lo stesso, per
+l'accoppiamento forzato all'indietro su un canale.)
+
+\subsubsection{Commit / rollback: \texttt{try\,\dots\,rollback\,\dots\,yrt}}
+\label{sec:try}
+Esegue il corpo $c$ in avanti, poi valuta la guardia di commit $b'$ sullo store
+risultante: se $b'$ è \emph{vera} il corpo resta applicato (commit); se è
+\emph{falsa} il corpo viene \textbf{annullato} eseguendo l'inverso $\Inv{c}$
+(\S\ref{sec:rev}), che riporta esattamente allo store iniziale, e poi si esegue
+il corpo di rollback $r$. A differenza di \texttt{if\,\dots\,fi}, le due
+guardie $b$ (ingresso) e $b'$ (uscita) non sono legate da alcun vincolo di
+coerenza: la decisione commit/rollback dipende solo da $b'$ valutata a fine
+corpo. La guardia d'ingresso $b$ ha quindi valore puramente documentale: non
+compare in alcuna premessa, né nello zucchero sintattico. Darle un ruolo
+semantico (una regola d'ingresso che la valuti, sul modello dell'asserzione
+del ciclo) è una possibile estensione, che qui non perseguiamo.
+
+\medskip
+\noindent
+Nella terminologia standard il costrutto è una \textbf{transazione}: con corpo
+di rollback vuoto ($r = \mathtt{skip}$) è una transazione \emph{acida} (o si
+applica interamente o non lascia traccia), mentre con un corpo di rollback non
+vuoto è una transazione \textbf{con compensazione}, dove $r$ è appunto
+l'azione compensativa eseguita dopo aver disfatto il tentativo. Il rollback in
+contesto concorrente è studiato in~\cite{LaneseMezzinaSchmittStefani2011,
+LaneseLienhardtMezzinaSchmittStefani2013}. Diamo qui le regole in stile
+big-step.
+
+\[
+\dfrac{\cfg{c}{\sigma} \toc^{*} \cfg{\mathtt{skip}}{\sigma'} \quad \cfg{b'}{\sigma'} \tob \cfg{\ttt}{\sigma'}}
+      {\cfg{\mathtt{try}\ b\ c\ \mathtt{rollback}\ r\ \mathtt{yrt}\ b'}{\sigma} \toc \cfg{\mathtt{skip}}{\sigma'}}
+      \rname{Try-Commit}
+\]
+\[
+\dfrac{\begin{array}{c}
+       \cfg{c}{\sigma} \toc^{*} \cfg{\mathtt{skip}}{\sigma'} \quad \cfg{b'}{\sigma'} \tob \cfg{\ff}{\sigma'}\\[0.3em]
+       \cfg{\Inv{c}}{\sigma'} \toc^{*} \cfg{\mathtt{skip}}{\sigma} \quad \cfg{r}{\sigma} \toc^{*} \cfg{\mathtt{skip}}{\sigma''}
+       \end{array}}
+      {\cfg{\mathtt{try}\ b\ c\ \mathtt{rollback}\ r\ \mathtt{yrt}\ b'}{\sigma} \toc \cfg{\mathtt{skip}}{\sigma''}}
+      \rname{Try-Rollback}
+\]
+\[
+\dfrac{\cfg{c}{\sigma} \toc^{*} \err}
+      {\cfg{\mathtt{try}\ b\ c\ \mathtt{rollback}\ r\ \mathtt{yrt}\ b'}{\sigma} \toc \err}
+      \rnameerr{Try-Err}
+\]
+La premessa $\cfg{\Inv{c}}{\sigma'} \toc^{*} \sigma$ è garantita dalla proprietà
+di reversibilità (\S\ref{sec:rev}): poiché $\cfg{c}{\sigma} \toc^{*} \sigma'$,
+l'inverso del corpo riporta allo store $\sigma$ \emph{pre-corpo}. Senza clausola
+\texttt{rollback} si pone $r = \mathtt{skip}$ (solo annullamento). È il
+\textbf{backtracking nativo}: il ripristino dello stato è l'inverso esatto del
+tentativo, senza copie/snapshot. \textcolor{red!60!black}{\textsc{Try-Err}} lascia che un errore del
+corpo esca dal \texttt{try} inalterato: un $\err$ è un bug di programma, non
+un fallimento della guardia $b'$, quindi non attiva il rollback.
+
+\paragraph{\static{Vincolo di buona formazione: niente canali nel corpo.}} Le premesse
+$\cfg{c}{\sigma} \toc^{*} \sigma'$ e $\cfg{\Inv{c}}{\sigma'} \toc^{*} \sigma$
+usano la relazione \textbf{non} etichettata: un $\mathtt{ssend}$/$\mathtt{srecv}$
+dentro $c$ produce però solo un passo etichettato (\S\ref{sec:chan}), e
+l'unica regola che lo consuma, \textsc{Par-Comm} (\S\ref{sec:par}), vive al
+livello di un \texttt{par}, sopra $c$, non dentro. Se $c$ (o $r$) contiene
+un $\mathtt{ssend}$/$\mathtt{srecv}$, diretto o raggiunto tramite
+$\mathtt{call}$/$\mathtt{uncall}$, $\cfg{c}{\sigma} \toc^{*} \sigma'$ non è
+derivabile: il \texttt{try} resta bloccato, non fallisce con $\err$. Un
+programma ben formato evita quindi \texttt{ssend}/\texttt{srecv} nel corpo e
+nel rollback di ogni \texttt{try}, direttamente o tramite
+\texttt{call}/\texttt{uncall} (\static{verificato staticamente}, non nella relazione
+di transizione). Non è un limite che valga la pena aggirare: anche
+potendolo esprimere, disfare uno $\mathtt{srecv}$ già sincronizzato
+richiederebbe di far ripartire dal punto giusto anche il ramo mittente, che
+nel frattempo può aver già proseguito, un \texttt{try}/\texttt{rollback} è
+un costrutto a un solo ramo, e non ha modo di coordinare la cooperazione di
+un partner che non controlla. Non è una limitazione ad hoc: è la difficoltà
+nota del rollback in contesto concorrente, dove annullare un'azione già
+comunicata obbliga a propagare l'annullamento ai partner che l'hanno
+osservata~\cite{LaneseMezzinaSchmittStefani2011,
+LaneseLienhardtMezzinaSchmittStefani2013}.
+
+\noindent
+Realizzazione (zucchero sintattico): il costrutto si riscrive con \texttt{if}
+e \texttt{call}/\texttt{uncall} su una procedura sintetica $f_c$ con corpo $c$
+(parametri = variabili libere di $c$):
+\[
+\mathtt{call}\ f_c(\bar v)\,;\,
+\mathtt{if}\ b'\ \mathtt{then}\ \mathtt{skip}\ \mathtt{else}\
+   \mathtt{uncall}\ f_c(\bar v)\,;\, r\ \mathtt{fi}\ b' .
+\]
+
+% ======================================================================
+\section{Errori a runtime}
+\label{sec:err}
+% ======================================================================
+
+L'esito d'errore è $\err$, ereditato dalla base insieme alla regola che lo
+solleva: $\Gamma_c' = \Gamma_c \cup \{\err\}$, $\top_c' = \top_c \cup
+\{\err\}$. La \textbf{propagazione} è interamente a carico della base:
+\textcolor{red!60!black}{\textsc{CtxError}} (\S\ref{sec:base}) fa risalire un
+$\err$ da qualunque posizione di contesto $C_s[\bullet]$: attraverso una
+sequenza, i rami di un condizionale, i corpi di un ciclo e i rami di un
+\texttt{par}. Nessun costrutto ha quindi bisogno di una propria
+regola di propagazione. Resta un'eccezione, \textcolor{red!60!black}{\textsc{Try-Err}}
+(\S\ref{sec:try}): il corpo di un \texttt{try} non è un buco di contesto,
+perché le sue regole lo riducono con $\toc^{*}$ in una premessa e devono
+conservarlo intatto per poterne eseguire l'inverso $\Inv{c}$ in caso di
+rollback. Lì una regola d'errore esplicita serve ancora.
+
+\medskip
+\noindent
+Quel che resta di specifico a Kairos è \textbf{quali} costrutti possono
+fallire \emph{localmente}. Sono i costrutti che Kairos aggiunge alla base
+(\S\ref{sec:base}), e ciascuno ha una regola propria che produce $\err$ invece
+di restare bloccato, perché nessun altro ramo potrebbe mai soddisfare quel
+vincolo, trattandosi di stato \textbf{locale} al ramo (\S\ref{sec:par}):
+\textcolor{red!60!black}{\textsc{Local-Err}} ($v \in \mathrm{dom}(\sigma)$) e
+\textcolor{red!60!black}{\textsc{Deloc-Err}} ($v \notin \mathrm{dom}(\sigma)$
+oppure $\sigma(v) \neq m$) per lo scope (\S\ref{sec:scope});
+\textcolor{red!60!black}{\textsc{Pop-Err}} (stack vuoto) e
+\textcolor{red!60!black}{\textsc{Pop-Err2}} ($\sigma(v) \neq 0$) per lo stack
+(\S\ref{sec:stack}); \textcolor{red!60!black}{\textsc{Srecv-Err}}
+($\sigma(\bar w) \neq \bar 0$) per la ricezione su canale (\S\ref{sec:chan}).
+Gli errori dei costrutti \emph{ereditati}, cioè l'asserzione incoerente nel
+condizionale (\textcolor{red!60!black}{\textsc{IfError1}}/%
+\textcolor{red!60!black}{\textsc{IfError2}}) e nel ciclo
+(\textcolor{red!60!black}{\textsc{LoopError1}}/%
+\textcolor{red!60!black}{\textsc{LoopError2}}), vengono invece dalla base e
+non sono discussi qui.
+
+\medskip
+\noindent
+\textbf{$\err$ contro blocco.} Questa distinzione è propria di Kairos, perché
+è la concorrenza a renderla possibile. Il blocco di sincronizzazione sui
+canali (\S\ref{sec:chan}) non è il fallimento di una premessa: è l'assenza di
+un ramo partner pronto con cui combinarsi in \textsc{Par-Comm}
+(\S\ref{sec:par}): nessuna regola si applica finché il partner non è pronto,
+ma un ramo parallelo può ancora offrirsi in un momento successivo, quindi
+\textbf{blocco}, non $\err$. Il criterio è dunque: se la condizione violata
+riguarda stato locale al ramo, nessuna evoluzione dell'ambiente potrà mai
+renderla vera e l'esito è $\err$; se riguarda la disponibilità di un partner,
+l'esito è blocco. È per questo che
+\textcolor{red!60!black}{\textsc{Srecv-Err}} produce $\err$ e non blocco: la
+sua premessa $\sigma(\bar w) \neq \bar 0$ parla delle variabili bersaglio del
+ricevente, non del canale.
+
+\medskip
+\noindent
+\textbf{Violazioni della sessione binaria.} Il vincolo di \S\ref{sec:chan} è
+una condizione sull'esecuzione, e si viola in due modi, entrambi con esito
+$\err$. Il primo è un \textbf{terzo titolare}: un ramo tocca un canale che ne
+ha già due. Non è blocco, perché nessuna evoluzione dell'ambiente può liberare
+un posto: chi cede un canale lo fa spedendolo, e l'ha già fatto o non lo farà.
+Il secondo è lo \textbf{stallo}: tutti i rami di un \texttt{par} sono fermi in
+attesa su canale. Il singolo blocco resta blocco, come detto sopra, perché un
+partner potrebbe ancora offrirsi; ma quando non resta alcun ramo che possa
+offrirsi, l'attesa non è più provvisoria e diventa $\err$. È la differenza fra
+non avere \emph{ancora} un partner e non poterne avere.
+
+\medskip
+\noindent
+La funzione di esecuzione
+\[
+\mathit{exec} : \mathit{Com} \times \Store \rightharpoonup \Store \cup \{\err\}
+\]
+resta perciò parziale (un ciclo può divergere, un canale può bloccarsi) ma
+segnala esplicitamente le violazioni di reversibilità.
+
+% ======================================================================
+\chapter{Reversibilità}
+\label{chap:reversibilita}
+\label{sec:rev}
+% ======================================================================
+
+L'esecuzione all'indietro è data dall'operatore di \emph{inversione}
+$\Inv{\cdot}$, definito per induzione sulla struttura del comando:
+{\small
+\begin{align*}
+\Inv{\mathtt{skip}} &= \mathtt{skip} &
+\Inv{c_1\,;\,c_2} &= \Inv{c_2}\,;\,\Inv{c_1} \quad \text{(ordine rovesciato)}\\
+\Inv{v \mathbin{+\!\!=} e} &= v \mathbin{-\!\!=} e &
+\Inv{v \mathbin{-\!\!=} e} &= v \mathbin{+\!\!=} e \\
+\Inv{v \mathbin{\hat{}\!=} e} &= v \mathbin{\hat{}\!=} e &
+\Inv{v_1 \mathbin{<\!=\!>} v_2} &= v_1 \mathbin{<\!=\!>} v_2 \\
+\Inv{\mathtt{local}\ v = m} &= \mathtt{delocal}\ v = m &
+\Inv{\mathtt{delocal}\ v = m} &= \mathtt{local}\ v = m \\
+\Inv{\mathtt{push}(v,s)} &= \mathtt{pop}(v,s) &
+\Inv{\mathtt{pop}(v,s)} &= \mathtt{push}(v,s) \\
+\Inv{\mathtt{call}\ f(\bar v)} &= \mathtt{uncall}\ f(\bar v) &
+\Inv{\mathtt{uncall}\ f(\bar v)} &= \mathtt{call}\ f(\bar v) \\
+\Inv{\mathtt{ssend}(\langle \bar v \rangle, \mathit{ch})} &= \mathtt{srecv}(\langle \bar v \rangle, \mathit{ch}) \\
+\Inv{\mathtt{srecv}(\langle \bar v \rangle, \mathit{ch})} &= \mathtt{ssend}(\langle \bar v \rangle, \mathit{ch})
+\end{align*}
+}
+\[
+\Inv{\mathtt{if}\ b\ \mathtt{then}\ c_t\ \mathtt{else}\ c_e\ \mathtt{fi}\ b'}
+   = \mathtt{if}\ b'\ \mathtt{then}\ \Inv{c_t}\ \mathtt{else}\ \Inv{c_e}\ \mathtt{fi}\ b
+\]
+\[
+\Inv{\mathtt{from}\ b_1\ \mathtt{do}\ c_1\ \mathtt{loop}\ c_2\ \mathtt{until}\ b_2}
+   = \begin{array}[t]{@{}l@{}}\mathtt{from}\ b_2\ \mathtt{do}\ \Inv{c_1}\\ \quad\mathtt{loop}\ \Inv{c_2}\ \mathtt{until}\ b_1\end{array}
+\]
+\[
+\Inv{\mathtt{par}\ c_1\ \mathtt{and}\ c_2\ \mathtt{rap}}
+   = \mathtt{par}\ \Inv{c_1}\ \mathtt{and}\ \Inv{c_2}\ \mathtt{rap}
+\]
+
+\noindent
+Le riscritture chiave sono lo \textbf{scambio delle guardie}: nel condizionale
+$b \leftrightarrow b'$, nel ciclo $b_1 \leftrightarrow b_2$. È ciò che permette
+all'esecuzione inversa di scegliere il ramo giusto / sapere quando fermarsi
+senza memorizzare la storia.
+
+\smallskip
+\noindent
+$\mathtt{ssend}$ e $\mathtt{srecv}$ sono, come ogni altra coppia della
+tabella, l'una l'inversa dell'altra, senza bisogno di comandi ausiliari.
+Questo vale grazie al vincolo di sessione binaria (\S\ref{sec:chan}): con al
+più due titolari del canale, la sincronizzazione \textsc{Par-Comm}
+(\S\ref{sec:par}) ha sempre un unico partner possibile, in avanti come
+all'indietro, quindi scambiare $\mathtt{ssend} \leftrightarrow \mathtt{srecv}$
+non può mai accoppiare i passi con il partner sbagliato. Il caso
+\texttt{par} più sotto sviluppa questo argomento.
+
+\paragraph{Proprietà di reversibilità.}
+Per ogni comando $c$ ben formato e stati $\sigma, \sigma'$ (senza $\err$):
+\[
+\cfg{c}{\sigma} \toc^{*} \cfg{\mathtt{skip}}{\sigma'}
+\qquad\Longleftrightarrow\qquad
+\cfg{\Inv{c}}{\sigma'} \toc^{*} \cfg{\mathtt{skip}}{\sigma} .
+\]
+Cioè $\Inv{c}$ calcola la relazione inversa di $c$ sullo store. In particolare,
+escludendo \texttt{par}, $\toc$ è deterministica e $c$ denota una funzione
+parziale \emph{iniettiva}; di conseguenza
+$\cfg{c\,;\,\Inv{c}}{\sigma} \toc^{*} \sigma$ (identità sullo store).
+
+Il determinismo non è un'osservazione a parte: comando per comando, le
+premesse delle sue regole (successo ed $\err$) sono a due a due incompatibili
+e la loro unione copre ogni $\sigma$ possibile, sono cioè una
+\textbf{partizione} dello spazio degli stati, quindi esattamente una regola
+si applica in ogni configurazione. Ad esempio per $\mathtt{pop}$:
+$\sigma(v)\neq 0$ (\textcolor{red!60!black}{\textsc{Pop-Err2}}), $\sigma(v)=0 \land \sigma(s)=\varepsilon$
+(\textcolor{red!60!black}{\textsc{Pop-Err}}), $\sigma(v)=0 \land \sigma(s)=n : \ell$ (\textsc{Pop})
+coprono ogni $\sigma$ esattamente una volta, senza sovrapposizioni. Fa
+eccezione solo la sincronizzazione di canale (\S\ref{sec:chan}): lì la
+partizione locale resta valida (\textcolor{red!60!black}{\textsc{Srecv-Err}} copre comunque
+esattamente il proprio caso), ma \textsc{Par-Comm} può temporaneamente non
+trovare un ramo partner pronto, lasciando nessuna regola applicabile: è il
+blocco di sincronizzazione, non una
+rottura del determinismo: nessuna configurazione ha mai \emph{due} regole
+applicabili contemporaneamente.
+
+\medskip
+\noindent
+La dimostrazione è per induzione strutturale su $c$ (equivalentemente, sulla
+derivazione di $\cfg{c}{\sigma} \toc^{*} \sigma'$): nei casi base
+gli assegnamenti si annullano per i vincoli $v \notin e$
+(\textsc{Add2}$\leftrightarrow$\textsc{Sub2}) o sono involuzioni
+($\mathbin{\hat{}\!=}$, $\mathbin{<\!=\!>}$); $\mathtt{push}/\mathtt{pop}$ si
+annullano per la convenzione \emph{zero-cleared}: \textsc{Pop} richiede in
+ingresso che il bersaglio sia già $0$, e \textsc{Push} lo ristabilisce
+esattamente in uscita. $\mathtt{ssend}/\mathtt{srecv}$ (via
+\textsc{Par-Comm}, \S\ref{sec:par}) si annullano per la \textbf{stessa}
+convenzione, applicata alla coppia di rami invece che a un solo comando: la
+premessa $\sigma(\bar w) = \bar 0$ sul lato ricevente ed effetto $\bar
+w \mapsto \bar n$ sono zero-cleared esattamente come \textsc{Pop}, e l'effetto
+$\bar v \mapsto \bar 0$ sul lato mittente è zero-cleared esattamente come
+\textsc{Push}: è ciò che rende $\mathtt{ssend}\,;\,\mathtt{srecv}$
+l'identità anche sulle variabili coinvolte, non solo un'astrazione sul
+canale;
+nei casi induttivi la doppia guardia di \texttt{if}/\texttt{from} garantisce
+che l'esecuzione inversa ripercorra lo stesso ramo / le stesse iterazioni.
+
+\smallskip
+\noindent
+Il caso induttivo \texttt{par}: sia $\cfg{\mathtt{par}\ c_1\ \mathtt{and}\
+c_2\ \mathtt{rap}}{\sigma} \toc^{n} \sigma'$ una derivazione di lunghezza $n$.
+Ogni passo è o un passo \textsc{Par-L}/\textsc{Par-L0} (risp.
+\textsc{Par-R}/\textsc{Par-R0}) che avanza \emph{un solo} ramo di un passo
+ordinario locale (esattamente uno dei casi già trattati sopra) o un passo
+\textsc{Par-Comm} (\S\ref{sec:par}) che avanza \emph{entrambi} i rami insieme
+in una sincronizzazione di canale. Per IH ogni passo locale del primo tipo è
+invertito esattamente da $\Inv{\cdot}$ applicato al comando ridotto in quel
+passo, indipendentemente da cosa contenga in quel momento l'altro ramo: le
+variabili \texttt{int}/\texttt{stack} sono disgiunte tra rami
+(\S\ref{sec:par}). Per il secondo tipo, \textsc{Par-Comm} stessa mostra come
+si inverte: le sue premesse sono $\sigma(\bar v) = \bar n$ (lato mittente) e
+$\sigma(\bar w) = \bar 0$ (lato ricevente), la conclusione è $\sigma[\bar
+v \mapsto \bar 0][\bar w \mapsto \bar n]$ (dallo stato risultante,
+$\sigma(\bar w) = \bar n \neq \bar 0$ e $\sigma(\bar v) = \bar 0$ sono
+esattamente le premesse per rieseguire \textsc{Par-Comm} con mittente e
+ricevente scambiati, cioè con $\mathtt{ssend} \leftrightarrow \mathtt{srecv}$
+scambiati in ciascun ramo), che riporta esattamente a $\sigma$.
+
+Percorrendo la derivazione all'indietro passo per passo, nell'ordine esatto
+inverso a quello forward, e invertendo ad ogni passo ciò che lo ha compiuto
+(un ramo solo per \textsc{Par-L}/\textsc{Par-R}, entrambi per
+\textsc{Par-Comm}), si ricostruisce $\sigma$: questo è esattamente ciò che
+$\Inv{\mathtt{par}\ c_1\ \mathtt{and}\ c_2\ \mathtt{rap}} = \mathtt{par}\
+\Inv{c_1}\ \mathtt{and}\ \Inv{c_2}\ \mathtt{rap}$ realizza staticamente.
+Resta da giustificare perché l'esecuzione all'indietro trovi \emph{sempre}
+questo percorso, e non un altro: non basta che un percorso corretto esista. Con più di due rami candidati su un canale un'esecuzione all'indietro
+potrebbe accoppiare i passi con il partner sbagliato, esattamente il tipo di
+errore che il vincolo di sessione binaria evita per costruzione. Con
+\textbf{esattamente due} rami sul canale (\S\ref{sec:chan}) e la sequenza di
+comandi di ciascun ramo fissata dal testo del programma, l'accoppiamento è
+\textbf{unico}, non frutto di un interleaving fortunato: a ogni istante
+\textsc{Par-Comm} può combinare solo l'offerta corrente del ramo mittente
+con quella del ramo ricevente, perché non ce n'è un terzo con cui
+confondersi: non c'è scelta di interleaving da sbagliare. Questo vale
+identicamente in avanti e all'indietro: invertire scambia
+$\mathtt{ssend} \leftrightarrow \mathtt{srecv}$ in ciascun ramo (sopra) e ne
+inverte l'ordine dei comandi ($\Inv{c_1\,;\,c_2} = \Inv{c_2}\,;\,\Inv{c_1}$),
+ma non introduce mai un terzo candidato partner. È il complemento
+all'indietro della confluenza dimostrata in \S\ref{sec:par-conf} per gli
+interleaving forward che non toccano canali: lì la confluenza viene dalla
+\emph{disgiunzione} (rami che non toccano canali operano su porzioni
+disgiunte dello store, i loro passi commutano); qui viene dalla
+\textbf{linearità} del canale (esattamente due estremità, \S\ref{sec:chan}),
+che rende l'unico partner possibile sempre univoco. In entrambi i casi non
+serve registrare la storia dell'esecuzione: la doppia guardia la evita nei
+casi sequenziali di \texttt{if}/\texttt{from} (sopra), la disgiunzione delle
+variabili la evita nel \texttt{par} forward, e la sessione binaria la evita
+nella sincronizzazione di canale, in avanti e all'indietro.
+
+\medskip
+\noindent
+Il costrutto \texttt{try\,\dots\,rollback} (\S\ref{sec:try}) non è un comando
+reversibile primitivo: è una \emph{struttura di controllo} che \emph{usa}
+l'inversione (esegue $\Inv{c}$ per annullare il tentativo fallito). Essendo
+zucchero per \texttt{if} + \texttt{call}/\texttt{uncall}, il suo inverso eredita
+quello del condizionale con chiamate.
+
+% ======================================================================
+\section{Quadro riassuntivo delle regole}
+% ======================================================================
+
+\begin{table}[H]
+\centering
+\small
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{@{}>{$}l<{$}p{4.6cm}>{$}l<{$}@{}}
+\hline
+\multicolumn{1}{@{}l}{\textbf{Comando}} & \textbf{Effetto sullo store} &
+\multicolumn{1}{l@{}}{\textbf{Inverso}}\\
+\hline
+v \mathbin{+\!\!=} e & $\sigma(v) \mathrel{+}= \mathit{eval}(e)$ & v \mathbin{-\!\!=} e\\
+v \mathbin{-\!\!=} e & $\sigma(v) \mathrel{-}= \mathit{eval}(e)$ & v \mathbin{+\!\!=} e\\
+v \mathbin{\hat{}\!=} e & $\sigma(v) \mathrel{\oplus}= \mathit{eval}(e)$ & \text{sé stesso}\\
+v_1 \mathbin{<\!=\!>} v_2 & scambia $v_1, v_2$ & \text{sé stesso}\\
+\mathtt{local}\ v = m & alloca $v = m$ & \mathtt{delocal}\ v = m\\
+\mathtt{delocal}\ v = m & verifica $v = m$, rimuove & \mathtt{local}\ v = m\\
+\mathtt{if}\ b \dots \mathtt{fi}\ b' & ramo per $b$, asserisce $b'$ & \mathtt{if}\ b' \dots \mathtt{fi}\ b\\
+\begin{array}[t]{@{}l@{}}\mathtt{from}\ b_1\ \mathtt{do}\ c_1\\ \quad\mathtt{loop}\ c_2\ \mathtt{until}\ b_2\end{array} & ciclo, traccia $c_1[c_2\,c_1]^{*}$ & \begin{array}[t]{@{}l@{}}\mathtt{from}\ b_2\ \mathtt{do}\ \Inv{c_1}\\ \quad\mathtt{loop}\ \Inv{c_2}\ \mathtt{until}\ b_1\end{array}\\
+\mathtt{call}\ f & esegue $c_f$ & \mathtt{uncall}\ f\\
+\mathtt{push}(v,s) & cima $s$, azzera $v$ & \mathtt{pop}(v,s)\\
+\mathtt{pop}(v,s) & verifica $v=0$, estrae cima in $v$ & \mathtt{push}(v,s)\\
+\mathtt{ssend}(\langle \bar v \rangle, \mathit{ch}) & (con partner pronto) azzera $\bar v$ & \mathtt{srecv}(\langle \bar v \rangle, \mathit{ch})\\
+\mathtt{srecv}(\langle \bar w \rangle, \mathit{ch}) & (con partner pronto) verifica $\bar w=\bar 0$, riceve & \mathtt{ssend}(\langle \bar w \rangle, \mathit{ch})\\
+\mathtt{par}\ c_1\ \mathtt{and}\ c_2\ \mathtt{rap} & interleaving di $c_1,c_2$ (non det.) & \mathtt{par}\ \Inv{c_1}\ \mathtt{and}\ \Inv{c_2}\ \mathtt{rap}\\
+\mathtt{try}\ b\ c\ \mathtt{rollback}\ r\ \mathtt{yrt}\ b' & commit se $b'$, altrimenti $\Inv{c}$ poi $r$ & \text{zucchero (\S\ref{sec:try})}\\
+\hline
+\end{tabular}
+\caption{Le regole di riduzione di Kairos, raggruppate per costrutto.}
+\label{tab:regole}
+\end{table}
+
+\noindent
+Le righe $\mathtt{ssend}$/$\mathtt{srecv}$ non riducono mai da sole: l'effetto
+indicato si realizza solo insieme, nella sincronizzazione congiunta
+\textsc{Par-Comm} (\S\ref{sec:chan}, \S\ref{sec:par}).
+
+\medskip
+\noindent
+Ogni fallimento di premessa produce $\err$ (stato locale) o blocco (stato
+condiviso, canale):
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{l l l}
+\hline
+\textbf{Condizione di fallimento} & \textbf{Regola} & \textbf{Esito}\\
+\hline
+$v \in \mathrm{dom}(\sigma)$ (\texttt{local}) & \textcolor{red!60!black}{\textsc{Local-Err}} & $\err$\\
+$v \notin \mathrm{dom}(\sigma)$ o $\sigma(v) \neq m$ (\texttt{delocal}) & \textcolor{red!60!black}{\textsc{Deloc-Err}} & $\err$\\
+test vero, asserzione falsa (\texttt{if}) & \textcolor{red!60!black}{\textsc{IfError1}} & $\err$\\
+test falso, asserzione vera (\texttt{if}) & \textcolor{red!60!black}{\textsc{IfError2}} & $\err$\\
+$\sigma(v) = 0 \land \sigma(s) = \varepsilon$ (\texttt{pop}) & \textcolor{red!60!black}{\textsc{Pop-Err}} & $\err$\\
+$\sigma(v) \neq 0$ (\texttt{pop}) & \textcolor{red!60!black}{\textsc{Pop-Err2}} & $\err$\\
+$\sigma(\bar w) \neq \bar 0$ (\texttt{srecv}) & \textcolor{red!60!black}{\textsc{Srecv-Err}} & $\err$\\
+nessun ramo partner pronto (\texttt{ssend}/\texttt{srecv}) & $-$ & blocco\\
+$b_1$ falsa all'ingresso (\texttt{from}) & \textcolor{red!60!black}{\textsc{LoopError1}} & $\err$\\
+$b_1$ vera a metà ciclo & \textcolor{red!60!black}{\textsc{LoopError2}} & $\err$\\
+\hline
+\end{tabular}
+\caption{Condizioni di fallimento e loro esito: errore o blocco.}
+\label{tab:fallimenti}
+\end{table}
+
+% ======================================================================
+\section{\texttt{show} e output osservabile}
+\label{sec:show}
+% ======================================================================
+
+Kairos dispone di un costrutto $\mathtt{show}(v)$ che stampa il valore di una
+variabile su un flusso esterno. \textbf{Non} fa parte del nucleo semantico della
+macchina reversibile e per questo è stato omesso dalle regole precedenti: serve
+come strumento di \emph{osservazione esterna} (ispezione dei valori durante
+l'esecuzione). La transizione associata è semplicemente
+$\cfg{\mathtt{show}(v)}{\sigma} \toc \cfg{\mathtt{skip}}{\sigma}$: lo store non viene toccato,
+quindi $\mathtt{show}$ è trasparente rispetto a tutte le proprietà enunciate
+nelle sezioni precedenti, che parlano solo di store.
+
+\medskip
+\noindent
+Resta però la domanda su cosa succeda all'\textbf{output osservabile} quando
+si esegue una procedura all'indietro. La risposta non è che l'inverso di
+$\mathtt{show}$ sia l'identità: è che $\mathtt{show}$ è un'\emph{involuzione},
+\[
+\Inv{\mathtt{show}(v)} = \mathtt{show}(v),
+\]
+sintatticamente autoinversa come $\mathbin{\hat{}\!=}$ e $\mathbin{<\!=\!>}$, con la differenza che per quelle l'involuzione è anche semantica, mentre $\mathtt{show}\,;\,\mathtt{show}$ stampa due volte
+(\S\ref{sec:rev}). Un $\mathtt{uncall}$ non sopprime dunque le stampe: le
+riesegue.
+
+\medskip
+\noindent
+\textbf{Nel frammento sequenziale} (senza $\mathtt{par}$), dove $\toc$ è
+deterministica (\S\ref{sec:rev}), l'inversione rovescia l'ordine dei comandi
+($\Inv{c_1\,;\,c_2} = \Inv{c_2}\,;\,\Inv{c_1}$), quindi i $\mathtt{show}$
+vengono incontrati in ordine opposto: se in avanti la procedura stampa
+$n_1, n_2, \dots, n_k$, all'indietro stampa $n_k, \dots, n_2, n_1$. È una
+\emph{simmetria osservabile}, la traccia esterna che rende visibile la
+reversibilità.
+
+\medskip
+\noindent
+\textbf{Con $\mathtt{par}$ la simmetria è solo locale.} L'inversione agisce
+ramo per ramo,
+\[
+\Inv{\mathtt{par}\ c_1\ \mathtt{and}\ c_2\ \mathtt{rap}} =
+\mathtt{par}\ \Inv{c_1}\ \mathtt{and}\ \Inv{c_2}\ \mathtt{rap}
+\quad (\S\ref{sec:rev}),
+\]
+quindi la sequenza di stampe \emph{di ciascun ramo} è
+rovesciata; ma l'ordine con cui le stampe dei rami diversi si intercalano non
+è determinato, perché l'interleaving non lo è (\S\ref{sec:par}). Già
+$\mathtt{par}\ \mathtt{show}(a)\ \mathtt{and}\ \mathtt{show}(b)\ \mathtt{rap}$
+può emettere $a,b$ sia in avanti sia all'indietro. L'output globale non è
+quindi il rovesciamento esatto di quello forward: lo è solo la proiezione su
+ogni singolo ramo.
+
+\medskip
+\noindent
+Resta vero, come detto sopra, che $\mathtt{show}$ non modifica lo store e non
+incide su nessuna delle proprietà enunciate, che parlano solo di store.
+
+% ======================================================================
+\chapter{Programmare in Kairos: compressione lossless reversibile}
+\label{chap:programmare}
+\label{sec:prog}
+% ======================================================================
+
+\section{Il punto di partenza}
+
+La compressione \emph{lossless} è il banco di prova naturale per un linguaggio
+reversibile: comprimere e decomprimere sono per costruzione l'una l'inversa
+dell'altra, quindi un unico programma reversibile le realizza entrambe e non
+esiste il rischio che le due metà divergano.
+
+Il lavoro da cui partiamo è quello di Lyngby et al.~\cite{LyngbyEtAl2024}, che
+ha realizzato in Janus versioni reversibili di due algoritmi dello standard zip:
+la compressione a dizionario LZW e la trasformata di Burrows--Wheeler. Il loro
+obiettivo non era la sola reversibilità ma la proprietà più forte di essere
+\emph{clean}, cioè non lasciare spazzatura: un algoritmo reversibile non può
+cancellare, quindi le strutture ausiliarie vanno azzerate invece che buttate. La
+tecnica con cui ci riescono è una coppia di procedure: la prima produce
+l'uscita insieme ai dati ausiliari, la seconda ricalcola gli stessi ausiliari
+partendo dall'uscita, e chiamare la prima disfacendo la seconda lascia solo
+l'uscita, senza storia globale.
+
+I risultati a cui arrivano sono netti. Il loro LZW gira in $\Theta(n)$ come la
+migliore versione irreversibile, quindi è asintoticamente ottimo. La loro BWT,
+con l'ordinamento ingenuo delle rotazioni, costa $O(n^3)$. Concludono che le
+tecniche della programmazione reversibile reggono su problemi reali, e che
+restano miglioramenti \emph{possibili e necessari}, indicando in particolare
+l'ordinamento delle rotazioni.
+
+Il loro lavoro è però interamente \textbf{sequenziale}, e nel descrivere la BWT
+osservano che in pratica l'ingresso si divide in blocchi, ciascuno trasformato
+separatamente. È l'osservazione da cui partiamo: blocchi trasformati
+separatamente sono blocchi indipendenti, e blocchi indipendenti sono rami di un
+\texttt{par} che operano su porzioni disgiunte dello store, cioè l'ipotesi sotto
+cui vale la confluenza (\cref{sec:par-conf}). In Janus quella strada non si può
+percorrere, perché il linguaggio non ha concorrenza. In Kairos sì, ed è il
+contributo di questo capitolo.
+
+\section{Che cosa cambia scrivendolo in Kairos}
+
+Gli algoritmi di compressione lavorano per indice, e Janus ha gli array. Kairos
+ha \texttt{int}, \texttt{stack} e \texttt{channel}, e uno stack si tocca solo in
+cima: l'accesso per indice va costruito, e resta dentro il linguaggio.
+
+\begin{lstlisting}
+procedure leggi(stack s, stack aux, int i, int r)
+    call sposta(s, aux, i)      // porta i elementi sull'appoggio
+    local int v = 0
+        pop(v, s)
+        r += v
+        push(v, s)
+    delocal int v = 0
+    uncall sposta(s, aux, i)    // e li rimette a posto
+\end{lstlisting}
+
+\noindent
+Rimettere a posto non è codice nuovo: è \texttt{uncall} dello spostamento,
+perché \texttt{push} e \texttt{pop} sono già una coppia inversa esatta. Il costo
+è però $O(i)$ per accesso, cioè $O(n)$ nel caso peggiore, e si paga su ogni
+lettura del blocco: è la differenza che separa la nostra complessità dalla loro.
+
+\section{Il confronto lessicografico}
+
+È il punto che il lavoro di riferimento indica come la difficoltà principale, e
+lo si tocca con mano. Confrontare due rotazioni significa trovare il primo
+carattere in cui differiscono, ma \textbf{non si può uscire in anticipo}: la
+guardia d'uscita di un $\mathtt{if}$ non distinguerebbe ``sono entrato e non ho
+ancora trovato'' da ``non sono entrato''.
+
+La via che funziona usa un testimone. Finché le due rotazioni coincidono, il
+contatore \texttt{pref} vale esattamente $k$; dopo il corpo vale $k$ oppure
+$k+1$, in entrambi i casi $\geq k$, mentre chi non è entrato è rimasto sotto.
+
+\begin{lstlisting}
+if pref == k then            // siamo ancora nel prefisso comune
+    if c1 > c2 then
+        gt += 1
+    fi gt == 1
+fi pref >= k                 // guardia d'uscita valida
+\end{lstlisting}
+
+\noindent
+Una formulazione alternativa, accumulare il valore posizionale in base $B$ della
+differenza fra le rotazioni, ordina anch'essa correttamente ed è pura
+accumulazione, ma richiede di moltiplicare per $B$ a ogni passo: in Kairos
+azzerare il fattore vorrebbe una divisione, cioè sottrazioni ripetute il cui
+costo dipende dal valore e non dalla lunghezza, e su numeri dell'ordine di $B^n$
+non è praticabile.
+
+\section{I blocchi in parallelo}
+
+Ogni blocco è un ramo, con le proprie strutture; l'unico punto di contatto è il
+canale su cui il ramo consegna il risultato. Il payload di un $\mathtt{ssend}$
+può essere uno stack intero, quindi la colonna trasformata viaggia in un colpo
+solo insieme al suo indice.
+
+\begin{lstlisting}
+procedure lavoratore(stack blocco, stack aux, stack offs, stack scarto,
+                     stack out, channel c, int n)
+    local int idx = 0
+        call bwt(blocco, aux, offs, scarto, out, n, idx)
+        ssend(<idx, out>, c)
+    delocal int idx = 0
+
+par
+    call lavoratore(b0, aux0, offs0, sc0, out0, c0, n)
+and
+    call lavoratore(b1, aux1, offs1, sc1, out1, c1, n)
+and
+    call raccoglitore(c0, c1, col0, col1, indici)
+rap
+\end{lstlisting}
+
+\section{Risultati}
+
+\paragraph{Correttezza.} Sul vettore di prova del lavoro di riferimento, la
+stringa \texttt{banana} con alfabeto ridotto ($a=1$, $b=2$, $n=3$):
+
+\begin{center}
+\begin{tabular}{ll}
+\hline
+blocco & \texttt{[2, 1, 3, 1, 3, 1]}\\
+rotazioni ordinate & \texttt{[5, 3, 1, 0, 4, 2]}\\
+ultima colonna & \texttt{[3, 3, 2, 1, 1, 1]} \quad cioè \texttt{nnbaaa}\\
+indice & \texttt{3}\\
+ricostruzione da (colonna, indice) & \texttt{[2, 1, 3, 1, 3, 1]}\\
+\hline
+\end{tabular}
+\end{center}
+
+\noindent
+Coincide con il loro esempio. La ricostruzione parte da \emph{sola} colonna e
+indice, quindi è decompressione vera e non un semplice \texttt{uncall}: usa la
+trasformata inversa classica, che costruisce il vettore delle righe precedenti e
+lo percorre a partire dall'indice. Verificata anche su blocchi di dodici simboli
+e tre blocchi concorrenti.
+
+\paragraph{Costo.} L'esponente misurato passa da $3{,}29$ a $3{,}57$ fra $n=6$ e
+$n=12$, in avvicinamento a $n^4$, contro gli $n^3$ del lavoro di riferimento. Il
+fattore in più è esattamente l'accesso per indice emulato sopra gli stack, e la
+misura lo conferma invece di limitarsi a prevederlo.
+
+\paragraph{Concorrenza.} Lo stesso calcolo con i blocchi in sequenza e con i
+blocchi come rami di un \texttt{par}, su una macchina a ventiquattro nuclei:
+
+\begin{center}
+\begin{tabular}{llll}
+\hline
+blocchi & sequenziale (s) & concorrente (s) & guadagno\\
+\hline
+2 & 4{,}44  & 3{,}53 & 1{,}26$\times$\\
+4 & 8{,}84  & 4{,}28 & 2{,}07$\times$\\
+6 & 13{,}30 & 6{,}42 & 2{,}07$\times$\\
+8 & 17{,}51 & 7{,}52 & 2{,}33$\times$\\
+\hline
+\end{tabular}
+\end{center}
+
+\noindent
+Il guadagno cresce col numero di rami, ma resta lontano dal numero di blocchi:
+il tempo non si divide per otto. Il collo di bottiglia non è nel linguaggio, che
+per costruzione non fa condividere nulla ai rami, ma nell'esecutore, dove
+strutture globali serializzano operazioni che i rami compiono in modo
+indipendente (\cref{chap:interprete}). Resta poi un limite proprio della misura:
+il raccoglitore è un ramo solo, e riceve dai canali uno per volta.
+
+\section{Limiti}
+
+Tre, dichiarati. L'alfabeto delle prove è ridotto a tre simboli: nulla nel
+codice ne dipende, ma neppure lo esercita. I blocchi sono corti, imposti dal
+costo $n^4$; con accesso per indice nativo si arriverebbe alla complessità del
+lavoro di riferimento. E la proprietà \emph{clean} nel senso stretto, cioè
+azzerare anche l'ingresso e non solo le strutture ausiliarie, richiederebbe la
+coppia di procedure applicata all'intera trasformata: qui gli ausiliari si
+azzerano disfacendo le procedure che li hanno prodotti, l'ingresso resta.
+
+% ======================================================================
+\chapter{Implementazione: l'interprete}
+\label{chap:interprete}
+% ======================================================================
+
+\section{La catena, dal sorgente all'esecuzione}
+
+L'implementazione è divisa in due metà, con un confine netto. La prima, in
+Python, porta il sorgente fino a un bytecode testuale; la seconda, in C, esegue
+quel bytecode nelle due direzioni.
+
+\begin{center}
+\begin{tabular}{lll}
+\hline
+& \textbf{stadio} & \textbf{prodotto}\\
+\hline
+\multirow{4}{*}{Python}
+ & analisi lessicale   & sequenza di token\\
+ & analisi sintattica  & albero sintattico\\
+ & generazione         & bytecode testuale\\
+\hline
+C & interprete         & esecuzione, in avanti e all'indietro\\
+\hline
+\end{tabular}
+\end{center}
+
+\noindent
+Il confine sta nel bytecode, ed è un file di testo. La scelta ha un costo, che
+si vedrà in \S\ref{sec:interprete}, e due ragioni. La prima è ispezionabilità:
+si può leggere ciò che la macchina esegue, e ogni riga porta il numero di riga
+del sorgente da cui proviene, che è quanto serve al debugger per fermarsi nel
+punto giusto. La seconda è che l'inversione non ha bisogno di una
+rappresentazione separata: ripercorre lo stesso testo al contrario.
+
+\section{Un esempio passo per passo}
+
+Si consideri una procedura che somma i primi $n$ interi, con il ciclo a due
+corpi (\cref{sec:loop}):
+
+\begin{lstlisting}
+procedure somma(int n, int s)
+    local int i = 0
+    from i == 0 do
+        s += i
+    loop
+        i += 1
+    until i == n
+    delocal int i = n
+\end{lstlisting}
+
+\paragraph{Analisi lessicale.} Il primo stadio riduce il testo a una sequenza di
+token, scartando spazi e commenti. Le parole chiave non sono espressioni
+regolari a sé: si riconosce un identificatore e si guarda se compare in una
+tabella di riservate, così aggiungerne una costa una riga.
+
+\begin{lstlisting}
+PROCEDURE ID(somma) LPAREN INT ID(n) COMMA INT ID(s) RPAREN
+LOCAL INT ID(i) EQUALS NUMBER(0)
+FROM ID(i) EQEQ NUMBER(0) DO
+  ID(s) PLUSEQUALS ID(i)
+LOOP
+  ID(i) PLUSEQUALS NUMBER(1)
+UNTIL ID(i) EQEQ ID(n)
+DELOCAL INT ID(i) EQUALS ID(n)
+\end{lstlisting}
+
+\paragraph{Analisi sintattica.} La grammatica è LALR(1), e ogni produzione
+costruisce direttamente il nodo corrispondente. Quella del ciclo mostra bene il
+rapporto fra le due cose:
+
+\begin{lstlisting}
+statement : FROM condition DO opt_body LOOP opt_body UNTIL condition
+
+p[0] = ('from', p[2], p[4], p[8], p.lineno(1), p.lineno(7), p[6])
+//               b1    c1    b2                             c2
+\end{lstlisting}
+
+\noindent
+I due numeri di riga, quella del \code{from} e quella dell'\code{until},
+servono al debugger per fermarsi sull'uno o sull'altro estremo del ciclo.
+
+\paragraph{Albero sintattico.} I nodi sono tuple, non oggetti, e ogni nodo porta
+in coda il numero di riga.
+
+\begin{lstlisting}
+('procedure', 'somma', [('int','n'), ('int','s')],
+ [('local', 'int', 'i', 0, 2),
+  ('from', ('cond','==','i',0),          // guardia d'ingresso
+           [('assign','s','+=','i',4)],  // corpo do
+           ('cond','==','i','n'),        // guardia d'uscita
+           3, 7,
+           [('assign','i','+=',1,6)]),   // corpo loop
+  ('delocal', 'int', 'i', 'n', 8)], 1)
+\end{lstlisting}
+
+\noindent
+Il secondo corpo sta in coda alla tupla, dopo i numeri di riga: le procedure che
+percorrono l'albero e leggono solo il primo corpo continuano a funzionare, e
+vanno estese soltanto dove il secondo conta davvero.
+
+\paragraph{Bytecode.} Ogni riga è un numero di riga sorgente, un opcode e i suoi
+argomenti.
+
+\begin{lstlisting}
+@1   PROC somma
+@1   PARAM int n
+@1   PARAM int s
+@2   LOCAL int i 0
+@3   EVAL i == 0             // guardia d'ingresso
+@3   JMPF FROM_ERR_5         // falsa: salta tutto il ciclo
+@3   JMP FROM_START_5        // vera: entra saltando il secondo corpo
+@3   LABEL FROM_BACK_5
+@6   PUSHEQ i 1              //   corpo loop
+@3   LABEL FROM_START_5
+@4   PUSHEQ s i              //   corpo do
+@7   EVAL i == n             // guardia d'uscita
+@7   JMPF FROM_BACK_5        // falsa: altra iterazione, passando dal loop
+@7   LABEL FROM_END_5
+@7   LABEL FROM_ERR_5
+@8   DELOCAL int i n
+@1   END_PROC somma
+\end{lstlisting}
+
+\noindent
+Il salto iniziale è ciò che realizza la traccia $c_1\,[c_2\,c_1]^{*}$: alla
+prima entrata il secondo corpo viene scavalcato, e ci si torna solo dal
+\emph{back-edge}. Le etichette non sono decorative: l'inversione non ha l'albero
+sintattico e ricostruisce la struttura del ciclo proprio dai loro nomi.
+
+\section{Strutture e ciclo di esecuzione}
+\label{sec:interprete}
+
+\paragraph{Strutture.} Lo store $\sigma$ della semantica è un \code{Frame}: un
+vettore di variabili, ciascuna con tipo, valore e, se è uno stack o un canale, la
+struttura associata; più le mappe che traducono i nomi in indici. Una
+configurazione $\langle \sigma, c\rangle$ è la coppia frame corrente e puntatore
+alla riga di bytecode.
+
+La traduzione nome-indice è una scansione lineare con confronto sul primo
+carattere prima di quello completo: per il numero di nomi di un frame batte una
+tabella hash, che pagherebbe l'hashing per un guadagno asintotico che non si
+materializza. Le mappe sono però dimensionate staticamente, e questo domina
+l'occupazione: un frame pesa oltre due megabyte quasi indipendentemente da
+quante variabili contenga, ed è il costo che si moltiplica per livello quando la
+ricorsione richiede istanze separate dello stesso frame.
+
+\paragraph{Ciclo principale.} L'interprete legge una riga, ne estrae l'opcode e
+lo confronta con una catena di nomi:
+
+\begin{lstlisting}
+else if (!strcmp(fw, "PUSHEQ"))  op_pusheq (vm, fname);
+else if (!strcmp(fw, "MINEQ"))   op_mineq  (vm, fname);
+else if (!strcmp(fw, "XOREQ"))   op_xoreq  (vm, fname);
+\end{lstlisting}
+
+\noindent
+L'inversione non richiede alcuna storia dei dati, ed è il punto in cui la
+reversibilità del linguaggio si paga da sola: l'inverso di un opcode è
+\emph{un altro opcode}, e la tavola degli inversi si scrive in quattro righe.
+Ciò che costa è ricostruire il cammino, non ripristinare i valori: quali rami
+sono stati presi, dove comincia e finisce un ciclo, quale iterazione si sta
+disfacendo.
+
+\section{Il parallelismo}
+
+Un blocco \texttt{par} genera un thread di sistema per ramo. I rami non
+condividono memoria per costruzione (\cref{sec:par}), quindi non serve alcun
+lock sullo store; l'unica primitiva di sincronizzazione è il canale, realizzato
+con un mutex e due code di attesa, una per i mittenti e una per i riceventi. Chi
+arriva per primo si accoda e si blocca, chi arriva per secondo trova il partner,
+lo sveglia, e lo scambio avviene: è il rendez-vous di \textsc{Par-Comm}.
+
+\medskip
+\noindent
+Non condividere lo store non basta però a rendere i rami indipendenti: lo
+diventano solo se non condividono nulla \emph{nemmeno nell'esecutore}. Tre
+strutture stanno sul cammino di ogni ramo e vanno tenute per thread o toccate
+con operazioni atomiche: lo stato della tokenizzazione, che è per thread; il
+rilevatore di scritture concorrenti su una cella intera, che vive nella cella e
+non in un lock unico; e l'indice che associa a ciascun ramo la propria copia del
+frame di una procedura, che si consulta senza esclusione perché è a sola
+aggiunta e pubblica ogni voce solo quando è completa. Sono i punti in cui una
+struttura globale, anche solo di servizio, annullerebbe il parallelismo che il
+linguaggio garantisce.
+
+\medskip
+\noindent
+Un costo resta, ed è la copia del bytecode: ogni ramo ne riceve una completa,
+perché la tokenizzazione scrive terminatori dentro il testo e due thread sullo
+stesso buffer si corromperebbero. Per i programmi di \cref{chap:programmare}
+sono diciotto kilobyte per ramo, poche centinaia di microsecondi su esecuzioni
+di secondi: si toglierebbe copiando la sola riga in lavorazione, ma non è lì che
+si gioca il parallelismo. Il guadagno misurato resta infatti sotto il numero di
+rami, e la distanza non ha una spiegazione già pronta.
+
+% ======================================================================
+\chapter{Lavori correlati}
+\label{chap:correlati}
+\label{sec:related}
+% ======================================================================
+
+Il lavoro più vicino per obiettivi è una precedente estensione concorrente di
+Janus~\cite{Sammarchi2019}, che aggiunge al linguaggio un costrutto
+\texttt{fork\,\dots\,and\,\dots\,join} e uno scambio di messaggi, e li realizza
+con un compilatore verso C++ che usa i thread POSIX. Il confronto è utile
+proprio perché il problema di partenza è lo stesso, e ogni scelta diversa si
+lega a una proprietà diversa.
+
+La prima differenza è di metodo: là i costrutti sono definiti dal codice in cui
+vengono tradotti, qui da regole di riduzione. Avere la semantica non è un
+ornamento: è ciò che permette di enunciare la confluenza e la reversibilità come
+proprietà del linguaggio, e non come comportamento osservato di una particolare
+traduzione.
+
+Le altre due differenze riguardano lo stato e i canali, e sono legate fra loro.
+Quel lavoro mantiene deliberatamente uno \emph{stato globale unico}, per non
+dover trattare allocazione e deallocazione nei rami concorrenti, e introduce le
+\texttt{struct} proprio per far arrivare dati ai thread. Kairos fa l'opposto e
+pretende che i rami tocchino porzioni disgiunte dello store: è una restrizione,
+ma è l'ipotesi da cui discende la confluenza degli interleaving
+(\S\ref{sec:par-conf}), che con memoria condivisa non sarebbe dimostrabile. Allo
+stesso modo, là i canali sono \emph{porte}, cioè code di messaggi con una
+capacità massima; qui la comunicazione è un rendez-vous senza buffer. Anche
+questa è una rinuncia, ed è quella che rende $\mathtt{ssend}$ e $\mathtt{srecv}$
+una coppia inversa esatta: su una coda i due agirebbero su estremità opposte, e
+l'inverso di un accodamento in fondo non sarebbe una ricezione dalla testa
+(\S\ref{sec:chan}).
+
+Fra i linguaggi reversibili e concorrenti il più vicino per costruzione è invece
+\textbf{CRIL}~\cite{OguchiYuen2024}, che però lavora a un livello di astrazione
+diverso: è un \emph{linguaggio intermedio}, non un linguaggio in cui si scrive.
+Un programma CRIL è una
+collezione di \emph{basic block}, ciascuno costituito da una singola istruzione a
+tre indirizzi con etichette per il flusso di controllo in avanti e all'indietro.
+CRIL estende RIL di Mogensen permettendo l'esecuzione concorrente di più
+chiamate di basic block in entrambe le direzioni, e la sua semantica operazionale
+soddisfa \emph{causal safety} e \emph{causal liveness} come criteri di
+correttezza per la reversibilità.
+
+Le differenze rispetto a Kairos sono sistematiche, e riguardano il livello di
+astrazione prima ancora dei costrutti:
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.25}
+\small
+\begin{tabular}{l l l}
+\hline
+ & \textbf{CRIL}~\cite{OguchiYuen2024} & \textbf{Kairos}\\
+\hline
+Livello & intermedio (basic block, 3 indirizzi) & alto, strutturato (stile Janus)\\
+Concorrenza & chiamate concorrenti di blocchi & \texttt{par\,\dots\,and\,\dots\,rap} esplicito\\
+Comunicazione & variabili condivise & canali sincroni, store \emph{disgiunti}\\
+Correttezza & causal safety / causal liveness & reversibilità (\S\ref{sec:rev}), confluenza (\S\ref{sec:par-conf})\\
+\hline
+\end{tabular}
+\caption{Kairos e CRIL a confronto.}
+\label{tab:cril}
+\end{table}
+
+\noindent
+La scelta di comunicare esclusivamente per canali su porzioni disgiunte dello
+store, invece che per variabili condivise, non è incidentale: è precisamente
+l'ipotesi di disgiunzione da cui discende la confluenza degli interleaving che
+non toccano canali (\S\ref{sec:par-conf}). Un confronto puntuale fra i due
+criteri di correttezza (causal safety/liveness da un lato, la proprietà di
+reversibilità di \S\ref{sec:rev} dall'altro) resta da svolgere.
+
+\medskip
+\noindent
+Sulle \textbf{transazioni} il termine di paragone è invece la linea di lavori su
+$\rho\pi$ e croll-$\pi$ \cite{LaneseMezzinaSchmittStefani2011,%
+LaneseLienhardtMezzinaSchmittStefani2013}, dove il ritorno all'indietro è
+governato da primitive esplicite e produce esattamente il comportamento di una
+transazione con compensazione. La differenza sta in dove si ferma la
+propagazione. In quei calcoli un rollback si propaga fra i processi: se un
+processo che deve essere disfatto ha nel frattempo comunicato con un altro,
+anche l'altro va disfatto, e il meccanismo che governa questa propagazione è
+buona parte della loro difficoltà. Kairos evita il problema per costruzione,
+vietando comunicazione e concorrenza dentro il corpo di un
+$\mathtt{try}\ldots\mathtt{rollback}$ (\S\ref{sec:try}): una transazione è
+locale a un ramo, e non c'è nulla da propagare. È una restrizione forte, ed è
+anche la ragione per cui le nostre transazioni si riducono a zucchero sintattico
+su costrutti già presenti; toglierla significherebbe affrontare la propagazione
+del rollback, che è il contributo proprio di quei lavori.
+
+% ======================================================================
+\chapter{Conclusioni e lavori futuri}
+\label{chap:conclusioni}
+\label{sec:concl}
+% ======================================================================
+
+Abbiamo presentato Kairos, un linguaggio imperativo strutturato che è insieme
+reversibile e concorrente, e ne abbiamo dato la semantica operazionale
+strutturale in stile small-step, definita come estensione di quella di Janus di
+Lami, Lanese e Stefani. Ciò che Kairos aggiunge alla base sono i costrutti che
+servono a un linguaggio concorrente e a un linguaggio con dati: composizione
+parallela, comunicazione sincrona su canali tipizzati, transazioni con
+compensazione, stack, parametri di procedura e ambito locale. Abbiamo definito
+l'operatore di inversione, sintattico e calcolabile in tempo lineare, e mostrato
+che l'esecuzione all'indietro di un blocco parallelo è ben definita: la
+disgiunzione delle porzioni di store toccate dai rami dà la confluenza degli
+interleaving che non comunicano, e il vincolo di sessione binaria rende unico
+l'accoppiamento fra un invio e la ricezione che lo consuma. Quel vincolo è
+sorvegliato come proprietà dell'esecuzione e non del testo, il che consente la
+delega, cioè il passaggio di un canale da un titolare a un altro. Il linguaggio
+è realizzato da un interprete, e su di esso abbiamo condotto un caso di studio:
+la trasformata di Burrows--Wheeler reversibile, con i blocchi trasformati in
+parallelo, verificata sul vettore di prova del lavoro da cui parte e misurata.
+
+\paragraph{Maturità pratica.} Il divario più netto è fra ciò che la teoria dice
+possibile e ciò che servirebbe a un compressore vero, e i due algoritmi dello
+standard zip lo mostrano in modo opposto. La compressione a dizionario regge:
+nella versione reversibile di riferimento gira in $\Theta(n)$, come la migliore
+irreversibile, quindi la reversibilità non costa nulla in complessità. La
+trasformata no: costa $O(n^3)$ già con gli array, e qui $O(n^4)$ perché
+l'accesso per indice è emulato sopra gli stack. Due cose lo colmerebbero, ed è
+la direzione che indicheremmo per prima. La prima è un tipo array nel
+linguaggio, con le sue regole nella semantica: toglierebbe il fattore $n$ e
+allineerebbe il costo a quello del lavoro di riferimento. La seconda è un
+ordinamento delle rotazioni migliore di quello ingenuo, che è il punto su cui
+quel lavoro stesso dichiara che i miglioramenti restano necessari. Finché
+entrambe mancano, i blocchi restano corti, e con blocchi corti la trasformata
+non ha il materiale su cui produrre l'effetto per cui esiste. Manca inoltre la
+proprietà \emph{clean} nel senso stretto: le strutture ausiliarie si azzerano
+disfacendo le procedure che le hanno prodotte, ma l'ingresso sopravvive
+all'uscita, mentre un compressore deve consumarlo.
+
+\paragraph{Il linguaggio.} La disciplina di sessione è parziale per costruzione:
+mancando la scelta etichettata, i due rami di un $\mathtt{if}$ che comunichi
+devono compiere le stesse azioni sul canale, e dove il frammento non basta il
+tipo resta indeterminato. Aggiungere la scelta renderebbe totale ciò che oggi
+riconosce i soli conflitti dimostrabili; i protocolli multiparty estenderebbero
+il tutto a canali con più di due partecipanti. Più in generale, l'assenza di
+corse critiche è qui un'ipotesi sotto cui valgono le proprietà, non un teorema:
+darle la forma di un sistema di tipi, separato dal calcolo, è il modo consueto
+di ottenerla e resta da fare. La comunicazione asincrona è un'altra estensione
+naturale, con l'avvertenza che non è un'aggiunta indolore: cambia ciò che si
+può dimostrare sull'inversione, perché un messaggio in transito è stato che il
+rendez-vous non produce.
+
+\paragraph{L'implementazione.} Il guadagno del calcolo concorrente cresce con il
+numero di rami ma resta sotto di esso, e la distanza non ha una spiegazione già
+pronta: individuare gli altri punti in cui l'esecutore condivide ciò che il
+linguaggio tiene separato è lavoro di misura prima che di progetto. Sul fronte
+della memoria, un frame costa oltre due megabyte quasi indipendentemente da
+quante variabili contenga, perché le tabelle dei nomi sono dimensionate
+staticamente; dimensionarle sul programma è l'intervento singolo che cambierebbe
+di più il profilo d'occupazione, e diventa vincolante appena la ricorsione
+richiede istanze separate dello stesso frame.
+
+\paragraph{Il confronto che manca.} Il criterio di correttezza adottato qui è la
+reversibilità con la confluenza che ne discende; la letteratura sui linguaggi
+reversibili concorrenti usa invece \emph{causal safety} e \emph{causal
+liveness}. Le due formulazioni parlano dello stesso fenomeno da posizioni
+diverse, e metterle a confronto in modo puntuale, mostrando quale implichi quale
+e sotto quali ipotesi, chiarirebbe dove si colloca la scelta di far comunicare i
+rami soltanto per canali su porzioni disgiunte dello store.
+
+\bigskip
+\noindent
+Reversibilità e concorrenza si studiano di solito separate: la prima nei
+linguaggi di programmazione, la seconda nei calcoli di processo, con poche
+occasioni di incontro. Kairos è un tentativo di averle insieme in un linguaggio
+in cui si scrivono programmi, e il caso di studio è la verifica che
+l'accostamento produca qualcosa: un unico programma che comprime e decomprime,
+su blocchi trasformati in parallelo, è una cosa che nessuno dei due filoni
+ottiene da solo.

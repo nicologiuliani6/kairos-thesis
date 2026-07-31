@@ -1,0 +1,76 @@
+% ======================================================================
+%  Kairos — un linguaggio reversibile e concorrente
+%  Tesi di laurea, Nicolò Giuliani
+%
+%  Struttura aderente al modello DISI di CartaBinaria:
+%  https://github.com/cartabinaria/latex-thesis
+%
+%  File:  preambolo.tex     pacchetti del modello + notazione propria
+%         frontespizio.tex  copertina, parole chiave, dedica
+%         capitoli.tex      il corpo della tesi
+%         refs.bib          bibliografia (natbib)
+% ======================================================================
+\documentclass[12pt,a4paper,twoside]{book}
+
+\input{preambolo}
+
+\begin{document}
+
+\input{frontespizio}
+
+\pagenumbering{gobble}
+
+\chapter*{Abstract}
+Kairos è un linguaggio di programmazione \emph{reversibile} e
+\emph{concorrente}, ispirato a Janus~\cite{YokoyamaGluck2007} ed esteso per
+esprimere problemi concorrenti. Ogni programma Kairos può essere eseguito sia in
+avanti sia all'indietro: l'inverso di qualunque computazione è sempre ben
+definito e calcolabile. Il linguaggio offre parallelismo esplicito,
+comunicazione sincrona su canali tipizzati e transazioni con compensazione.
+
+Questa tesi ne dà la semantica operazionale strutturale in stile small-step,
+definita come estensione della semantica di Janus di Lami, Lanese e
+Stefani~\cite{LamiLaneseStefani2024}, e l'operatore di inversione che realizza
+l'esecuzione all'indietro. Sui canali si adotta una disciplina di sessione
+binaria sorvegliata durante l'esecuzione, che ammette la delega, cioè il
+passaggio di un canale da un titolare a un altro.
+
+\topmargin=-1cm
+\tableofcontents
+\thispagestyle{empty}
+\listoftables
+\thispagestyle{empty}
+\newpage~\newpage
+
+\pagenumbering{arabic}
+\setcounter{chapter}{-1}   % il modello numera l'introduzione come capitolo 0
+\raggedbottom
+\pagestyle{plain}
+\setcounter{page}{1}
+
+\input{capitoli}
+
+% ======================================================================
+%  Bibliografia
+% ======================================================================
+\renewcommand{\bibsection}{}
+\chapter*{Riferimenti bibliografici}
+\addcontentsline{toc}{chapter}{Riferimenti bibliografici}
+\bibliography{refs}
+\newpage
+
+% ======================================================================
+%  Appendici — nessuna, per ora.
+%  Il modello le prevede; per riaggiungerle basta:
+%      \renewcommand{\appendixtocname}{Appendici}
+%      \renewcommand{\appendixpagename}{Appendici}
+%      \pagenumbering{gobble}
+%      \begin{appendices} \chapter{...} ... \end{appendices}
+% ======================================================================
+\pagenumbering{gobble}
+
+\newpage~\newpage
+\chapter*{Ringraziamenti}
+\textcolor{gray}{[ringraziamenti]}
+
+\end{document}

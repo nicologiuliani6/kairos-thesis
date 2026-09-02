@@ -47,12 +47,20 @@ linguaggio reversibile.
 
 \medskip
 \noindent
-\textbf{Kairos} sta in quel territorio. Al nucleo di Janus (assegnamenti
-invertibili, condizionali a doppia guardia, cicli \texttt{from\,\dots\,until},
-procedure invocabili con \texttt{call} e \texttt{uncall}) aggiunge il
-parallelismo esplicito \texttt{par\,\dots\,and\,\dots\,rap}, la comunicazione
-sincrona su canali tipizzati \texttt{ssend}/\texttt{srecv}, uno stack come
-struttura dati primitiva e le transazioni \texttt{try\,\dots\,rollback\,\dots\,yrt}.
+\textbf{Kairos} sta in quel territorio. Il nome è il greco
+\kairosgr{} (\emph{kairós}): non il tempo che scorre, che è \chronosgr{}
+(\emph{chrónos}), ma il momento opportuno, l'istante in cui una cosa va fatta. La distinzione è
+pertinente a un linguaggio reversibile, dove il tempo non è una freccia ma una
+coordinata percorribile nei due versi, e ciò che conta di un passo non è
+\emph{quando} avviene ma che sia quello giusto: l'inversa di un programma non ne
+riavvolge la storia, ne esegue un altro che riporta allo stato di partenza.
+
+Al nucleo di Janus (assegnamenti invertibili, condizionali a doppia guardia,
+cicli \texttt{from\,\dots\,until}, procedure invocabili con \texttt{call} e
+\texttt{uncall}, interi e array) Kairos aggiunge il parallelismo esplicito
+\texttt{par\,\dots\,and\,\dots\,rap}, la comunicazione sincrona su canali
+tipizzati \texttt{ssend}/\texttt{srecv}, uno stack come struttura dati primitiva
+e le transazioni \texttt{try\,\dots\,rollback\,\dots\,yrt}.
 La scelta di progetto che tiene insieme il tutto è la \emph{disgiunzione}: rami
 paralleli operano su porzioni disgiunte dello store e comunicano solo per
 canali. Da questa singola ipotesi discende la confluenza degli interleaving che
@@ -271,8 +279,25 @@ Categorie derivate:
 
 \paragraph{Espressioni aritmetiche $e \in \mathit{Exp}$.}
 \begin{align*}
-e ::= m \mid v \mid e + e \mid e - e
+e ::= m \mid v \mid a[e] \mid e \oplus e
+\qquad
+\oplus \in \{+,\,-,\,*,\,/,\,\%\}
 \end{align*}
+
+\noindent
+$a[e]$ è la lettura della cella di indice $e$ dell'array $a$. Gli operatori
+moltiplicativi compaiono solo dentro le espressioni, mai come assegnamento:
+$*$ e $/$ non hanno un'inversa che restituisca l'operando, mentre a destra di
+$\mathbin{+\!\!=}$ non tolgono nulla, perché l'inversa dell'assegnamento è
+$\mathbin{-\!\!=}$ con la \emph{stessa} espressione, e questa dipende da
+variabili che il comando non tocca. $/$ e $\%$ sono la divisione intera e il
+resto; il divisore nullo non ha risultato e produce un errore:
+\[
+\dfrac{}{\cfg{m / 0}{\sigma} \toe \err}\ \rnameerr{Div-Err}
+\]
+con la regola gemella per $\%$. È un fallimento come gli altri
+(\S\ref{sec:err}), non un valore convenzionale: un valore convenzionale
+renderebbe l'operazione non iniettiva proprio dove serve che lo sia.
 
 \paragraph{Condizioni $b \in \mathit{Cond}$.}
 \begin{align*}
@@ -282,11 +307,12 @@ b ::= e = e \mid e \neq e \mid e \geq e \mid e \leq e \mid e > e \mid e < e
 \paragraph{Comandi $c \in \mathit{Com}$.}
 \begin{align*}
 c ::={}& \mathtt{skip} && \text{(comando vuoto)}\\
-   \mid{}& v \mathbin{+\!\!=} e \mid v \mathbin{-\!\!=} e \mid v \mathbin{\hat{}\!=} e \mid v \mathbin{<\!=\!>} v && \text{(assegnamenti reversibili)}\\
+   \mid{}& \ell \mathbin{+\!\!=} e \mid \ell \mathbin{-\!\!=} e \mid \ell \mathbin{\hat{}\!=} e \mid \ell \mathbin{<\!=\!>} \ell && \text{(assegnamenti reversibili)}\\
    \mid{}& \mathtt{local}\ v = m \mid \mathtt{delocal}\ v = m && \text{(scope)}\\
+   \mid{}& \mathtt{local}\ a[n] = m \mid \mathtt{delocal}\ a[n] = m && \text{(scope, array)}\\
    \mid{}& c\ ;\ c && \text{(sequenza)}\\
-   \mid{}& \mathtt{if}\ b\ \mathtt{then}\ c\ \mathtt{else}\ c\ \mathtt{fi}\ b' && \text{(condizionale)}\\
-   \mid{}& \begin{array}[t]{@{}l@{}}\mathtt{from}\ b_1\ \mathtt{do}\ c_1\\ \quad\mathtt{loop}\ c_2\ \mathtt{until}\ b_2\end{array} && \text{(ciclo)}\\
+   \mid{}& \mathtt{if}\ b\ [\mathtt{then}\ c]\ [\mathtt{else}\ c]\ \mathtt{fi}\ b' && \text{(condizionale)}\\
+   \mid{}& \begin{array}[t]{@{}l@{}}\mathtt{from}\ b_1\ [\mathtt{do}\ c_1]\\ \quad[\mathtt{loop}\ c_2]\ \mathtt{until}\ b_2\end{array} && \text{(ciclo)}\\
    \mid{}& \mathtt{call}\ f(\bar v) \mid \mathtt{uncall}\ f(\bar v) && \text{(chiamata / inversa)}\\
    \mid{}& \mathtt{push}(v,s) \mid \mathtt{pop}(v,s) && \text{(stack)}\\
    \mid{}& \mathtt{ssend}(\langle \bar v \rangle, \mathit{ch}) \mid \mathtt{srecv}(\langle \bar v \rangle, \mathit{ch}) && \text{(canali)}\\
@@ -295,13 +321,21 @@ c ::={}& \mathtt{skip} && \text{(comando vuoto)}\\
 \end{align*}
 
 \noindent
+Il bersaglio di un assegnamento è un \emph{luogo} $\ell ::= v \mid a[e]$: una
+variabile intera oppure una cella di array. Le due forme si comportano allo
+stesso modo — l'unica differenza è che la cella va individuata valutando
+l'indice prima di scrivere.
+
+\noindent
 Un \emph{programma} è una lista di procedure
 $\mathtt{procedure}\ f(\bar v)\ \{\, c \,\}$; $\bar v$ è la lista (eventualmente
 vuota) dei parametri. La sequenza è scritta con il punto e virgola esplicito,
 $c_1\,;\,c_2$, come nelle regole di \S\ref{sec:seq}. Il condizionale ha
 \textbf{due} guardie ($b$ d'ingresso, $b'$ d'uscita) e il ciclo pure ($b_1$
 d'ingresso, $b_2$ d'uscita): è ciò che rende il linguaggio reversibile
-(\S\ref{sec:rev}). Un programma ben formato soddisfa inoltre due vincoli: su
+(\S\ref{sec:rev}). Le parentesi quadre segnano le clausole \emph{facoltative},
+come in Janus: un ramo assente vale $\mathtt{skip}$, e nelle regole che seguono
+si scrivono per esteso tutte e due, senza perdita di generalità. Un programma ben formato soddisfa inoltre due vincoli: su
 $\mathtt{par}$, ogni canale usato al suo interno è condiviso da esattamente
 due rami concorrenti (\S\ref{sec:chan}); su $\mathtt{try}\ldots
 \mathtt{rollback}\ldots\mathtt{yrt}$, né il corpo $c$ né il corpo di
@@ -326,16 +360,19 @@ sua chiusura riflessiva e transitiva:
 
 \noindent
 Per dare significato alle variabili introduciamo uno \textbf{store}. In Kairos
-le variabili sono di tre tipi: \texttt{int} (interi), \texttt{stack} (sequenze di
-interi) e \texttt{channel} (canali: nomi di sincronizzazione tra rami
-paralleli). Un canale \textbf{non} contiene valori: è un punto di
+le variabili sono di quattro tipi: \texttt{int} (interi), \texttt{int}$[n]$
+(array: $n$ interi, con $n$ fissato alla dichiarazione), \texttt{stack}
+(sequenze di interi) e \texttt{channel} (canali: nomi di sincronizzazione tra
+rami paralleli). Array e stack sono entrambi sequenze di interi ma si usano in
+modi opposti: l'array ha lunghezza fissa e si legge per indice senza
+consumarlo, lo stack cresce e cala e si tocca solo in cima. Un canale \textbf{non} contiene valori: è un punto di
 rendez-vous, non un contenitore (\S\ref{sec:chan}), a differenza di
 \texttt{stack}, un canale allocato mantiene sempre la stessa identità per
 tutta la sua vita, e $\sigma(\mathit{ch})$ non compare mai
 nell'aggiornamento di una regola. Indicando con $\mathit{Chan}$ l'insieme
 (opaco) delle identità di canale, lo store è
 \[
-\sigma : \mathit{Var} \rightharpoonup \mathbb{Z} \cup \mathbb{Z}^{*} \cup \mathit{Chan},
+\sigma : \mathit{Var} \rightharpoonup \mathbb{Z} \cup \mathbb{Z}^{n} \cup \mathbb{Z}^{*} \cup \mathit{Chan},
 \]
 parziale perché lo scope cambia con \texttt{local}/\texttt{delocal}. Per le
 sequenze: $\varepsilon$ è la vuota, $n : \ell$ è il \emph{cons} (la testa $n$
@@ -614,6 +651,39 @@ a destra ($v \notin e$)}, così l'operazione è iniettiva.
 \dfrac{}{\cfg{v_1 \mathbin{<\!=\!>} v_2}{\sigma} \toc \cfg{\mathtt{skip}}{\upd{\upd{\sigma}{v_1}{\sigma(v_2)}}{v_2}{\sigma(v_1)}}} \rname{Swap}
 \]
 
+\paragraph{Celle di array.} Quando il bersaglio è $a[e_i]$ le regole sono le
+stesse, con un passo in più davanti: l'indice si riduce a un intero prima che
+si scriva. Scriviamo $\sigma(a)_k$ per la $k$-esima componente e
+$\updc{\sigma}{a}{k}{m}$ per l'aggiornamento della sola cella $k$, cioè
+$\upd{\sigma}{a}{\sigma(a)[k \mapsto m]}$. Diamo le regole per
+$\mathbin{+\!\!=}$; $\mathbin{-\!\!=}$ e $\mathbin{\hat{}\!=}$ sono identiche a
+meno dell'operatore.
+\[
+\dfrac{\cfg{e_i}{\sigma} \toe \cfg{e_i'}{\sigma}}
+      {\cfg{a[e_i] \mathbin{+\!\!=} e}{\sigma} \toc \cfg{a[e_i'] \mathbin{+\!\!=} e}{\sigma}} \rname{IdxL}
+\]
+\[
+\dfrac{0 \leq k < |\sigma(a)|}
+      {\cfg{a[k] \mathbin{+\!\!=} m}{\sigma} \toc \cfg{\mathtt{skip}}{\updc{\sigma}{a}{k}{\sigma(a)_k + m}}} \rname{AddA}
+\]
+\[
+\dfrac{k < 0 \ \lor\ k \geq |\sigma(a)|}
+      {\cfg{a[k] \mathbin{+\!\!=} m}{\sigma} \toc \err} \rnameerr{Idx-Err}
+\]
+
+\noindent
+L'indice fuori dai limiti è un errore e non un accesso silenzioso: in un
+linguaggio reversibile scrivere fuori dal vettore romperebbe l'inversione senza
+lasciare traccia, e l'errore comparirebbe altrove.
+
+\noindent
+Il vincolo statico si estende di conseguenza: in $a[e_i] \mathbin{+\!\!=} e$ il
+nome $a$ non può comparire in $e$. È più forte del necessario — basterebbe che
+non fosse la \emph{stessa} cella — ma gli indici non sono decidibili
+staticamente, ed è la stessa scelta di Janus. Lo scambio $a[e_1]
+\mathbin{<\!=\!>} a[e_2]$ resta invece ammesso: è involutivo comunque siano gli
+indici, ed è quello che rende scrivibile un ordinamento sul posto.
+
 \subsubsection{Scope: \texttt{local} / \texttt{delocal}}
 \label{sec:scope}
 \texttt{local}\ alloca $v$ con valore $m$; \texttt{delocal}\ \emph{verifica} che
@@ -635,6 +705,21 @@ invertibile).
 \dfrac{v \notin \mathrm{dom}(\sigma) \ \lor\ \sigma(v) \neq m}
       {\cfg{\mathtt{delocal}\ v = m}{\sigma} \toc \err} \rnameerr{Deloc-Err}
 \]
+Per un array il valore dichiarato vale per \emph{ogni} cella: aprirlo lo
+riempie di $m$, chiuderlo verifica che tutte lo valgano ancora. Una sola cella
+fuori posto è informazione non restituita, e la chiusura fallisce.
+\[
+\dfrac{a \notin \mathrm{dom}(\sigma)}
+      {\cfg{\mathtt{local}\ a[n] = m}{\sigma} \toc \cfg{\mathtt{skip}}{\upd{\sigma}{a}{m^{n}}}} \rname{LocalA}
+\]
+\[
+\dfrac{\sigma(a) = m^{n}}
+      {\cfg{\mathtt{delocal}\ a[n] = m}{\sigma} \toc \cfg{\mathtt{skip}}{\sigma \setminus a}} \rname{DelocA}
+\]
+dove $m^{n}$ è la sequenza di $n$ copie di $m$. I due casi d'errore sono quelli
+di \textsc{Local-Err} e \textsc{Deloc-Err}, con in più il disaccordo sulla
+lunghezza: chiudere come $a[n']$ un array aperto come $a[n]$, con $n' \neq n$,
+non è l'inversa dell'apertura.
 Un'unica
 sottigliezza propria di \textcolor{red!60!black}{\textsc{Deloc-Err}}: se $v \notin \mathrm{dom}(\sigma)$,
 $\sigma(v)$ non è definito e non si può confrontare con $m$: la premessa
@@ -1320,8 +1405,8 @@ $\Inv{\cdot}$, definito per induzione sulla struttura del comando:
    = \begin{array}[t]{@{}l@{}}\mathtt{from}\ b_2\ \mathtt{do}\ \Inv{c_1}\\ \quad\mathtt{loop}\ \Inv{c_2}\ \mathtt{until}\ b_1\end{array}
 \]
 \[
-\Inv{\mathtt{par}\ c_1\ \mathtt{and}\ c_2\ \mathtt{rap}}
-   = \mathtt{par}\ \Inv{c_1}\ \mathtt{and}\ \Inv{c_2}\ \mathtt{rap}
+\Inv{\mathtt{par}\ c_1\ \mathtt{and}\ \dots\ \mathtt{and}\ c_n\ \mathtt{rap}}
+   = \mathtt{par}\ \Inv{c_1}\ \mathtt{and}\ \dots\ \mathtt{and}\ \Inv{c_n}\ \mathtt{rap}
 \]
 
 \noindent
@@ -1329,6 +1414,33 @@ Le riscritture chiave sono lo \textbf{scambio delle guardie}: nel condizionale
 $b \leftrightarrow b'$, nel ciclo $b_1 \leftrightarrow b_2$. È ciò che permette
 all'esecuzione inversa di scegliere il ramo giusto / sapere quando fermarsi
 senza memorizzare la storia.
+
+\smallskip
+\noindent
+Il $\mathtt{par}$ si inverte ramo per ramo, senza riordinarli fra loro, e le due
+proprietà che il linguaggio già impone bastano a giustificarlo. I rami operano su
+porzioni disgiunte dello store (\S\ref{sec:par}), quindi ciò che un ramo fa alle
+proprie variabili si inverte indipendentemente da cosa stia facendo un altro; e
+ogni canale ha due soli titolari (\S\ref{sec:chan}), quindi ogni appuntamento ha
+un unico partner possibile. Poiché $\Inv{\mathtt{ssend}} = \mathtt{srecv}$ e
+$\Inv{\mathtt{srecv}} = \mathtt{ssend}$, rovesciando l'ordine dei comandi dentro
+ciascun ramo si rovescia la successione degli appuntamenti, e i due estremi di
+ciascuno restano l'uno di fronte all'altro. La dimostrazione è più sotto, nel
+caso induttivo \texttt{par}.
+
+\smallskip
+\noindent
+L'argomento ha un'ipotesi, ed è che i titolari di ogni canale siano fissati dal
+testo del programma. Se un canale può viaggiare \emph{dentro} un messaggio ---
+$\mathtt{ssend}(\langle x, \mathit{ch}_2\rangle, \mathit{ch}_1)$, la mobilità
+del $\pi$-calcolo --- la titolarità di $\mathit{ch}_2$ non è più una proprietà
+del testo ma il risultato di un appuntamento precedente su $\mathit{ch}_1$.
+Rovesciando l'ordine dei comandi, gli usi di $\mathit{ch}_2$ verrebbero prima
+dell'appuntamento che lo consegna, e i due estremi non si troverebbero più l'uno
+di fronte all'altro: l'esecuzione all'indietro si blocca. Su quei programmi
+$\Inv{\cdot}$ non è definita per il $\mathtt{par}$, e l'inversione va ottenuta
+per altra via (\S\ref{sec:interprete}). È una restrizione che si riconosce sul
+testo, e nel corpus di prova riguarda due programmi su ottantanove.
 
 \smallskip
 \noindent
@@ -1421,8 +1533,10 @@ Resta da giustificare perché l'esecuzione all'indietro trovi \emph{sempre}
 questo percorso, e non un altro: non basta che un percorso corretto esista. Con più di due rami candidati su un canale un'esecuzione all'indietro
 potrebbe accoppiare i passi con il partner sbagliato, esattamente il tipo di
 errore che il vincolo di sessione binaria evita per costruzione. Con
-\textbf{esattamente due} rami sul canale (\S\ref{sec:chan}) e la sequenza di
-comandi di ciascun ramo fissata dal testo del programma, l'accoppiamento è
+\textbf{esattamente due} rami sul canale (\S\ref{sec:chan}), e purché siano i
+due che il testo del programma indica --- è qui che serve l'ipotesi sopra: un
+canale che viaggia dentro un messaggio i suoi titolari li acquisisce a tempo di
+esecuzione ---, l'accoppiamento è
 \textbf{unico}, non frutto di un interleaving fortunato: a ogni istante
 \textsc{Par-Comm} può combinare solo l'offerta corrente del ramo mittente
 con quella del ramo ricevente, perché non ce n'è un terzo con cui
@@ -1511,6 +1625,8 @@ $\sigma(\bar w) \neq \bar 0$ (\texttt{srecv}) & \textcolor{red!60!black}{\textsc
 nessun ramo partner pronto (\texttt{ssend}/\texttt{srecv}) & $-$ & blocco\\
 $b_1$ falsa all'ingresso (\texttt{from}) & \textcolor{red!60!black}{\textsc{LoopError1}} & $\err$\\
 $b_1$ vera a metà ciclo & \textcolor{red!60!black}{\textsc{LoopError2}} & $\err$\\
+indice fuori dai limiti ($a[k]$) & \textcolor{red!60!black}{\textsc{Idx-Err}} & $\err$\\
+divisore nullo ($e/e'$, $e\,\%\,e'$) & \textcolor{red!60!black}{\textsc{Div-Err}} & $\err$\\
 \hline
 \end{tabular}
 \caption{Condizioni di fallimento e loro esito: errore o blocco.}
@@ -1518,6 +1634,25 @@ $b_1$ vera a metà ciclo & \textcolor{red!60!black}{\textsc{LoopError2}} & $\err
 \end{table}
 
 % ======================================================================
+\paragraph{Array.} L'inversione non distingue una variabile da una cella: il
+bersaglio è un luogo, e il luogo resta lo stesso.
+\[
+\Inv{a[e_i] \mathbin{+\!\!=} e} = a[e_i] \mathbin{-\!\!=} e
+\qquad
+\Inv{a[e_1] \mathbin{<\!=\!>} a[e_2]} = a[e_1] \mathbin{<\!=\!>} a[e_2]
+\]
+\[
+\Inv{\mathtt{local}\ a[n] = m} = \mathtt{delocal}\ a[n] = m
+\qquad
+\Inv{\mathtt{delocal}\ a[n] = m} = \mathtt{local}\ a[n] = m
+\]
+L'indice $e_i$ non viene invertito perché non è un comando: è un'espressione,
+valutata nello stesso store in entrambe le direzioni. Vale però la condizione
+che rende l'inversione corretta: fra il comando diretto e il suo inverso le
+variabili che compaiono in $e_i$ non devono essere cambiate, ed è la stessa
+condizione, già richiesta per l'espressione a destra, che il vincolo statico di
+\S\ref{sec:assign} garantisce.
+
 \section{\texttt{show} e output osservabile}
 \label{sec:show}
 % ======================================================================
@@ -1575,6 +1710,63 @@ ogni singolo ramo.
 Resta vero, come detto sopra, che $\mathtt{show}$ non modifica lo store e non
 incide su nessuna delle proprietà enunciate, che parlano solo di store.
 
+\section{Conformità a Janus}
+\label{sec:conformita}
+
+Che Kairos contenga Janus è un'affermazione verificabile, e conviene verificarla
+su programmi che non abbiamo scritto noi. Il report originale del
+linguaggio~\cite{LutzDerby1982} ne contiene tre: la radice intera, un
+ordinamento a bolle con permutazione e la fattorizzazione di un intero. Sono del
+1982, e la loro ortografia non è quella di oggi — il commento è \texttt{;}, lo
+scambio \texttt{:}, la disuguaglianza \texttt{\#}, il resto
+\texttt{\textbackslash}, e le variabili sono globali invece che parametri — ma
+la struttura è la stessa, e tradurli è una sostituzione di simboli, non una
+riscrittura.
+
+\paragraph{La radice intera gira in entrambe le direzioni.} Consuma
+$\mathit{num}$ producendo $\mathit{rt} = \lfloor\sqrt{\mathit{num}}\rfloor$; la
+$\mathtt{uncall}$ riporta $\mathit{rt}$ a zero e $\mathit{num}$ al valore
+iniziale. Da sola esercita buona parte di ciò che serve a un programma Janus:
+moltiplicazione, divisione e resto dentro le guardie (\S\ref{sec:sintassi}),
+cicli con la sola clausola $\mathtt{loop}$, e una procedura ausiliaria invocata
+con $\mathtt{call}$ e $\mathtt{uncall}$ dentro lo stesso corpo.
+
+\paragraph{L'ordinamento a bolle non è invertibile.} È il caso interessante,
+perché il difetto sta nel listato del 1982 e non nella traduzione. Il suo
+condizionale è
+
+\begin{lstlisting}
+if   list[j] > list[j+1]
+then list[j] <=> list[j+1]
+     perm[j] <=> perm[j+1]
+fi   perm[j] > perm[j+1]
+\end{lstlisting}
+
+\noindent
+e la guardia d'uscita deve distinguere i due rami: vera dopo $\mathtt{then}$,
+falsa dopo $\mathtt{else}$ (\S\ref{sec:if}). Non lo fa. Con
+$\mathit{list} = [4,2,5,1,3]$ e $\mathit{perm}$ identità, alla terza iterazione
+esterna si ha $\mathit{list} = [1,2,4,3,5]$ e $\mathit{perm} = [3,1,0,4,2]$: il
+confronto $\mathit{list}[3] > \mathit{list}[4]$ è $3 > 5$, falso, quindi si
+prende il ramo vuoto, ma $\mathit{perm}[3] > \mathit{perm}[4]$ è $4 > 2$, vero.
+Il condizionale non ha inverso in quel punto, perché $\mathit{perm}$ registra da
+dove viene ogni elemento e non se lo scambio è appena avvenuto, e le due cose
+non coincidono. È il caso d'uso dell'asserzione: senza, il programma
+proseguirebbe e l'errore comparirebbe molto più tardi, come un valore sbagliato
+alla chiusura di una variabile. Del listato resta perciò la sola procedura che
+costruisce la permutazione identità, che è un programma Janus valido e usa un
+array come parametro: la chiamata lo riempie con $0,\dots,n-1$, la
+$\mathtt{uncall}$ lo riazzera. La fattorizzazione, il terzo programma, non è
+stata tradotta.
+
+\medskip
+\noindent
+Ai due si aggiunge un programma scritto per l'occasione, che esercita tutte e
+sei le forme delle clausole facoltative di $\mathtt{if}$ e $\mathtt{from}$
+(\S\ref{sec:sintassi}) con le asserzioni che devono reggere. I tre stanno nel
+corpus di verifica insieme agli altri, quindi la conformità non è
+un'osservazione fatta una volta ma un controllo che accompagna ogni modifica.
+
 % ======================================================================
 \chapter{Programmare in Kairos: compressione lossless reversibile}
 \label{chap:programmare}
@@ -1617,26 +1809,37 @@ contributo di questo capitolo.
 
 \section{Che cosa cambia scrivendolo in Kairos}
 
-Gli algoritmi di compressione lavorano per indice, e Janus ha gli array. Kairos
-ha \texttt{int}, \texttt{stack} e \texttt{channel}, e uno stack si tocca solo in
-cima: l'accesso per indice va costruito, e resta dentro il linguaggio.
+Gli algoritmi di compressione lavorano per indice, e l'accesso per indice è
+diretto: \texttt{blocco[j]} legge la cella $j$ senza consumarla e senza toccare
+le altre, come nel lavoro di riferimento. Il ciclo che confronta due rotazioni
+legge quindi il blocco al costo di una lettura, non di una passeggiata.
 
 \begin{lstlisting}
-procedure leggi(stack s, stack aux, int i, int r)
-    call sposta(s, aux, i)      // porta i elementi sull'appoggio
-    local int v = 0
-        pop(v, s)
-        r += v
-        push(v, s)
-    delocal int v = 0
-    uncall sposta(s, aux, i)    // e li rimette a posto
+procedure car(int blocco[], int n, int off, int k, int c)
+    local int j = 0
+        j += off
+        j += k
+        if j >= n then
+            j -= n
+        fi j < off
+        c += blocco[j]
+        if j < off then
+            j += n
+        fi j >= n
+        j -= k
+        j -= off
+    delocal int j = 0
 \end{lstlisting}
 
 \noindent
-Rimettere a posto non è codice nuovo: è \texttt{uncall} dello spostamento,
-perché \texttt{push} e \texttt{pop} sono già una coppia inversa esatta. Il costo
-è però $O(i)$ per accesso, cioè $O(n)$ nel caso peggiore, e si paga su ogni
-lettura del blocco: è la differenza che separa la nostra complessità dalla loro.
+Il carattere $k$-esimo della rotazione che parte da $\mathit{off}$ sta in
+posizione $(\mathit{off}+k) \bmod n$. Il modulo non si scrive con l'operatore
+ma con un $\mathtt{if}$, e la ragione è la reversibilità: $j$ è una variabile
+locale che va riportata a zero, quindi la correzione $j \mathrel{-}= n$ deve
+poter essere disfatta, e per disfarla serve sapere se è avvenuta. La guardia
+d'uscita $j < \mathit{off}$ lo dice — dopo la correzione $j$ è sceso sotto
+$\mathit{off}$, senza correzione no — e il secondo $\mathtt{if}$, che è
+l'inverso del primo, la usa per rimettere $j$ a posto.
 
 \section{Il confronto lessicografico}
 
@@ -1690,6 +1893,14 @@ and
 rap
 \end{lstlisting}
 
+\noindent
+Qui il blocco viaggia come \texttt{stack} e non come array, e la ragione è il
+canale: il payload di un $\mathtt{ssend}$ può essere un intero, uno stack o un
+canale, non un vettore. Trasferire un array richiederebbe di deciderne la sorte
+nel mittente — un rendez-vous consuma ciò che manda, e un array ha lunghezza
+fissa — ed è una scelta che non abbiamo compiuto. La versione concorrente
+resta perciò quella su stack, e i tempi che seguono sono i suoi.
+
 \section{Risultati}
 
 \paragraph{Correttezza.} Sul vettore di prova del lavoro di riferimento, la
@@ -1698,11 +1909,11 @@ stringa \texttt{banana} con alfabeto ridotto ($a=1$, $b=2$, $n=3$):
 \begin{center}
 \begin{tabular}{ll}
 \hline
-blocco & \texttt{[2, 1, 3, 1, 3, 1]}\\
-rotazioni ordinate & \texttt{[5, 3, 1, 0, 4, 2]}\\
-ultima colonna & \texttt{[3, 3, 2, 1, 1, 1]} \quad cioè \texttt{nnbaaa}\\
+blocco & \texttt{\{2, 1, 3, 1, 3, 1\}}\\
+rotazioni ordinate & \texttt{\{5, 3, 1, 0, 4, 2\}}\\
+ultima colonna & \texttt{\{3, 3, 2, 1, 1, 1\}} \quad cioè \texttt{nnbaaa}\\
 indice & \texttt{3}\\
-ricostruzione da (colonna, indice) & \texttt{[2, 1, 3, 1, 3, 1]}\\
+ricostruzione da (colonna, indice) & \texttt{\{1, 3, 1, 3, 1, 2\}}\\
 \hline
 \end{tabular}
 \end{center}
@@ -1711,50 +1922,118 @@ ricostruzione da (colonna, indice) & \texttt{[2, 1, 3, 1, 3, 1]}\\
 Coincide con il loro esempio. La ricostruzione parte da \emph{sola} colonna e
 indice, quindi è decompressione vera e non un semplice \texttt{uncall}: usa la
 trasformata inversa classica, che costruisce il vettore delle righe precedenti e
-lo percorre a partire dall'indice. Verificata anche su blocchi di dodici simboli
+lo percorre a partire dall'indice. Il cammino attraversa la matrice a partire
+dalla riga $\mathit{idx}$, quindi restituisce il blocco a meno di una rotazione:
+$\{1,3,1,3,1,2\}$ è \texttt{banana} letta da capo dopo la \texttt{b}. Verificata anche su blocchi di dodici simboli
 e tre blocchi concorrenti.
 
-\paragraph{Costo.} L'esponente misurato passa da $3{,}29$ a $3{,}57$ fra $n=6$ e
-$n=12$, in avvicinamento a $n^4$, contro gli $n^3$ del lavoro di riferimento. Il
-fattore in più è esattamente l'accesso per indice emulato sopra gli stack, e la
-misura lo conferma invece di limitarsi a prevederlo.
+\paragraph{Costo.} Il tempo di esecuzione di un blocco, al variare della sua
+lunghezza $n$ (bytecode congelato, misura del solo interprete, minimo di cinque
+ripetizioni):
 
-\paragraph{Concorrenza.} Lo stesso calcolo con i blocchi in sequenza e con i
-blocchi come rami di un \texttt{par}, su una macchina a ventiquattro nuclei:
+\begin{center}
+\begin{minipage}[c]{0.28\textwidth}
+\centering
+\begin{tabular}{ll}
+\hline
+$n$ & tempo\\
+\hline
+12 & 0{,}04 s\\
+16 & 0{,}10 s\\
+20 & 0{,}20 s\\
+24 & 0{,}35 s\\
+28 & 0{,}56 s\\
+32 & 0{,}87 s\\
+\hline
+\end{tabular}
+\end{minipage}%
+\hfill
+\begin{minipage}[c]{0.66\textwidth}
+\centering
+% Assi logaritmici in base 2: su di essi una legge di potenza e' una retta, e
+% l'esponente e' la pendenza. La retta disegnata e' quella dei minimi quadrati.
+\begin{tikzpicture}[x=3.3cm,y=1.05cm]
+  \draw[->] (-0.08,0) -- (1.72,0) node[right,font=\footnotesize] {$n$ (log)};
+  \draw[->] (-0.08,-0.15) -- (-0.08,5.35) node[above right,font=\footnotesize] {tempo (log)};
+  % tacche su n
+  \foreach \X/\L in {0.085/12, 0.5/16, 0.822/20, 1.085/24, 1.307/28, 1.5/32}
+    \draw (\X,0) -- (\X,-0.09) node[below,font=\footnotesize] {\L};
+  % tacche sul tempo (secondi, raddoppi)
+  \foreach \Y/\L in {1/{0{,}0625\,s}, 2/{0{,}125\,s}, 3/{0{,}25\,s}, 4/{0{,}5\,s}, 5/{1\,s}}
+    \draw (-0.08,\Y) -- (-0.13,\Y) node[left,font=\footnotesize] {\L};
+  % retta dei minimi quadrati, pendenza 2,84
+  \draw[thick,gray!70] (0,0.219) -- (1.6,5.067);
+  % punti misurati
+  \foreach \X/\Y in {0.085/0.500, 0.5/1.725, 0.822/2.692, 1.085/3.491, 1.307/4.168, 1.5/4.792}
+    \fill (\X,\Y) circle (1.7pt);
+  \node[font=\footnotesize,anchor=west] at (0.62,1.30) {pendenza $3{,}03$};
+\end{tikzpicture}
+\end{minipage}
+\end{center}
+
+\noindent
+Gli assi sono logaritmici, quindi l'allineamento dei punti dice che il costo è
+una legge di potenza e la pendenza ne dà l'esponente. La retta di regressione di
+$\log t$ su $\log n$ ha pendenza $3{,}03$: il costo è $n^3$, lo stesso del lavoro
+di riferimento, e l'accesso per indice non aggiunge nulla all'ordine di
+grandezza. È quello che ci si aspetta dalla forma
+del programma: l'ordinamento a bolle compie $O(n^2)$ confronti fra rotazioni, e
+ciascun confronto ne scandisce $O(n)$ caratteri.
+
+\paragraph{Concorrenza.} Lo stesso calcolo in due varianti che differiscono in
+un solo punto, la procedura che orchestra i blocchi. Nella prima ogni blocco sta
+in un \texttt{par} a sé, insieme alla sola ricezione del proprio risultato: il
+lavoratore e il suo ricevente procedono insieme, ma i blocchi si susseguono, e
+non c'è parallelismo \emph{fra} blocchi. Nella seconda tutti i lavoratori sono
+rami di un unico \texttt{par}, con il raccoglitore come ultimo ramo. Con $n=8$,
+su una macchina a \emph{due} nuclei:
 
 \begin{center}
 \begin{tabular}{llll}
 \hline
-blocchi & sequenziale (s) & concorrente (s) & guadagno\\
+blocchi & un \texttt{par} per blocco (s) & un \texttt{par} solo (s) & guadagno\\
 \hline
-2 & 4{,}44  & 3{,}53 & 1{,}26$\times$\\
-4 & 8{,}84  & 4{,}28 & 2{,}07$\times$\\
-6 & 13{,}30 & 6{,}42 & 2{,}07$\times$\\
-8 & 17{,}51 & 7{,}52 & 2{,}33$\times$\\
+2 & 0{,}71 & 0{,}62 & 1{,}16$\times$\\
+4 & 1{,}49 & 1{,}11 & 1{,}34$\times$\\
+6 & 2{,}21 & 1{,}67 & 1{,}32$\times$\\
+8 & 2{,}87 & 1{,}96 & 1{,}46$\times$\\
 \hline
 \end{tabular}
 \end{center}
 
 \noindent
-Il guadagno cresce col numero di rami, ma resta lontano dal numero di blocchi:
-il tempo non si divide per otto. Il collo di bottiglia non è nel linguaggio, che
-per costruzione non fa condividere nulla ai rami, ma nell'esecutore, dove
-strutture globali serializzano operazioni che i rami compiono in modo
-indipendente (\cref{chap:interprete}). Resta poi un limite proprio della misura:
-il raccoglitore è un ramo solo, e riceve dai canali uno per volta.
+Il dato da leggere non è il guadagno in sé ma quanto si avvicina al massimo che
+la macchina rende disponibile. Con due nuclei quel massimo è $2\times$, e a otto
+rami se ne raggiunge il settantatré per cento: il parallelismo che il linguaggio
+dichiara si realizza. Invertendo la legge di Amdahl, un guadagno di $1{,}46\times$
+su due processori corrisponde a una frazione parallela del sessantatré per cento
+circa, e la parte restante ha un candidato preciso nella forma del programma: il
+raccoglitore è un ramo solo e riceve dai canali uno per volta, quindi le consegne
+si allineano.
+
+Va detto ciò che questi dati non dicono. Sono presi su due nuclei, e da soli non
+autorizzano alcuna previsione sul comportamento con molti più nuclei: la stessa
+frazione sequenziale ammetterebbe in linea di principio guadagni ben superiori a
+quelli qui osservati. Il guadagno cresce con il numero di rami senza appiattirsi
+entro i quattro punti misurati, e con quattro volte più rami che nuclei ci si
+aspetterebbe di vedere la contesa fra thread: quattro punti non bastano a dire
+se manchi o se cominci più in là. Stabilire dove il guadagno si fermi davvero richiede
+la misura su una macchina con più nuclei, e un raccoglitore ad albero per togliere
+di mezzo la parte sequenziale del programma di prova.
 
 \section{Limiti}
 
 Tre, dichiarati. L'alfabeto delle prove è ridotto a tre simboli: nulla nel
 codice ne dipende, ma neppure lo esercita. I blocchi sono corti, imposti dal
-costo $n^4$; con accesso per indice nativo si arriverebbe alla complessità del
-lavoro di riferimento. E la proprietà \emph{clean} nel senso stretto, cioè
+costo $n^3$ dell'ordinamento ingenuo delle rotazioni, che è il punto su cui il
+lavoro di riferimento stesso dichiara che i miglioramenti restano necessari. E
+la proprietà \emph{clean} nel senso stretto, cioè
 azzerare anche l'ingresso e non solo le strutture ausiliarie, richiederebbe la
 coppia di procedure applicata all'intera trasformata: qui gli ausiliari si
 azzerano disfacendo le procedure che li hanno prodotti, l'ingresso resta.
 
 % ======================================================================
-\chapter{Implementazione: l'interprete}
+\chapter{Implementazione: interprete e DAP}
 \label{chap:interprete}
 % ======================================================================
 
@@ -1784,8 +2063,10 @@ Il confine sta nel bytecode, ed è un file di testo. La scelta ha un costo, che
 si vedrà in \S\ref{sec:interprete}, e due ragioni. La prima è ispezionabilità:
 si può leggere ciò che la macchina esegue, e ogni riga porta il numero di riga
 del sorgente da cui proviene, che è quanto serve al debugger per fermarsi nel
-punto giusto. La seconda è che l'inversione non ha bisogno di una
-rappresentazione separata: ripercorre lo stesso testo al contrario.
+punto giusto. La seconda è che il testo basta a sé anche all'indietro: il corpo
+inverso di una procedura è a sua volta bytecode, emesso dallo stesso generatore
+e eseguito dallo stesso ciclo, e non serve una seconda macchina che lo
+interpreti.
 
 \section{Un esempio passo per passo}
 
@@ -1862,10 +2143,13 @@ argomenti.
 @1   PARAM int s
 @2   LOCAL int i 0
 @3   EVAL i == 0             // guardia d'ingresso
-@3   JMPF FROM_ERR_5         // falsa: salta tutto il ciclo
-@3   JMP FROM_START_5        // vera: entra saltando il secondo corpo
+@3   ASSERTT                 // dev'essere vera qui  (LoopError1)
+@3   JMPF FROM_ERR_5
+@3   JMP FROM_START_5        // entra saltando il secondo corpo
 @3   LABEL FROM_BACK_5
 @6   PUSHEQ i 1              //   corpo loop
+@3   EVAL i == 0
+@3   ASSERTZ                 // e falsa qui         (LoopError2)
 @3   LABEL FROM_START_5
 @4   PUSHEQ s i              //   corpo do
 @7   EVAL i == n             // guardia d'uscita
@@ -1879,42 +2163,146 @@ argomenti.
 \noindent
 Il salto iniziale è ciò che realizza la traccia $c_1\,[c_2\,c_1]^{*}$: alla
 prima entrata il secondo corpo viene scavalcato, e ci si torna solo dal
-\emph{back-edge}. Le etichette non sono decorative: l'inversione non ha l'albero
-sintattico e ricostruisce la struttura del ciclo proprio dai loro nomi.
+\emph{back-edge}.
+
+Le due asserzioni del ciclo (\cref{sec:loop}) — $b_1$ vera alla prima entrata,
+\textsc{LoopError1}, e falsa a ogni ri-entrata, \textsc{LoopError2} — sono
+emesse come opcode dedicati, e abortiscono l'esecuzione quando cadono. Non sono
+diagnostica accessoria: è quell'invariante a rendere il ciclo invertibile per
+sola sintassi, perché senza di esso l'inversa
+$\mathtt{from}\ b_2\ \mathtt{do}\ \Inv{c_1}\ \mathtt{loop}\ \Inv{c_2}\
+\mathtt{until}\ b_1$ uscirebbe dopo una iterazione mentre l'originale ne compie
+$n$. L'implementazione di riferimento di Janus adotta la stessa scelta:
+\texttt{assertTrue} prima della prima iterazione e \texttt{assertFalse} dopo
+ogni corpo \emph{loop}~\cite{YokoyamaGluck2007}.
+
+L'inverso di una procedura si ottiene in un modo solo, ed è quello della
+\cref{sec:call}: si applica $\Inv{\cdot}$ all'albero sintattico e si emette un
+secondo corpo, dentro la stessa procedura, che l'esecuzione diretta scavalca con
+un salto e a cui $\mathtt{uncall}$ entra per etichetta. Da lì in poi
+$\mathtt{uncall}$ è una normale esecuzione in avanti: stesso ciclo, stesso
+frame, stessi parametri, e nessuna macchina separata che percorra il programma
+al contrario cercando di dedurne la struttura.
+
+Il $\mathtt{par}$ non fa eccezione: il corpo inverso di una procedura che ne
+contiene uno è $\mathtt{par}\ \Inv{c_1}\ \mathtt{and}\ \dots\ \mathtt{and}\
+\Inv{c_n}\ \mathtt{rap}$, cioè la regola del \cref{chap:reversibilita} applicata
+alla lettera --- rovesciando l'ordine dentro ogni ramo si rovescia la successione
+degli appuntamenti, e i due estremi di ciascuno restano l'uno di fronte
+all'altro. Vale a una condizione, ed è la stessa da cui viene l'unicità
+dell'accoppiamento: che i titolari di ogni canale siano fissati dal testo. Se un
+canale viaggia \emph{dentro} un messaggio --- $\mathtt{ssend}(\langle x,
+\mathit{ch}_2\rangle, \mathit{ch}_1)$, la mobilità del $\pi$-calcolo --- la
+titolarità di $\mathit{ch}_2$ nasce invece da un appuntamento precedente su
+$\mathit{ch}_1$, e rovesciando l'ordine dei comandi gli usi di $\mathit{ch}_2$
+verrebbero prima dell'appuntamento che lo consegna. Non è un timore teorico: dei
+programmi di prova due lo fanno, e con il corpo inverso emesso comunque si
+fermano entrambi in stallo, ogni ramo in attesa su un canale di cui nessun altro
+è ancora titolare. Il compilatore riconosce quindi il caso, e lo riconosce sul
+programma intero perché un ramo può limitarsi a chiamare la procedura che
+trasmette; per quei due programmi su ottantanove non emette corpo inverso, e
+l'inversione resta affidata al motore dinamico, che accoppia gli appuntamenti
+mentre esegue invece di prevederli. Per tutti gli altri, $\mathtt{par}$ inclusi,
+l'inverso è compilato.
+
+Sta dentro la stessa procedura, e non in una nuova, perché così ne condivide la
+tabella dei nomi: l'ordine in cui gli indici vengono assegnati, che il dump
+finale rende osservabile, resta quello dell'esecuzione diretta.
 
 \section{Strutture e ciclo di esecuzione}
 \label{sec:interprete}
 
 \paragraph{Strutture.} Lo store $\sigma$ della semantica è un \code{Frame}: un
 vettore di variabili, ciascuna con tipo, valore e, se è uno stack o un canale, la
-struttura associata; più le mappe che traducono i nomi in indici. Una
-configurazione $\langle \sigma, c\rangle$ è la coppia frame corrente e puntatore
-alla riga di bytecode.
+struttura associata. Una configurazione $\langle \sigma, c\rangle$ è la coppia
+frame corrente e puntatore alla riga di bytecode.
 
-La traduzione nome-indice è una scansione lineare con confronto sul primo
-carattere prima di quello completo: per il numero di nomi di un frame batte una
-tabella hash, che pagherebbe l'hashing per un guadagno asintotico che non si
-materializza. Le mappe sono però dimensionate staticamente, e questo domina
-l'occupazione: un frame pesa oltre due megabyte quasi indipendentemente da
-quante variabili contenga, ed è il costo che si moltiplica per livello quando la
-ricorsione richiede istanze separate dello stesso frame.
+La tabella che traduce i nomi in indici non sta nel frame ma nella
+\emph{procedura}, ed è condivisa da tutte le sue attivazioni. La distinzione
+conta: un indice denota allora lo stesso nome ovunque, mentre una tabella per
+attivazione lo legherebbe al momento in cui l'attivazione è nata, e lo stesso
+indice potrebbe indicare variabili diverse in due istanze della stessa
+procedura.
 
-\paragraph{Ciclo principale.} L'interprete legge una riga, ne estrae l'opcode e
-lo confronta con una catena di nomi:
+La traduzione nome-indice è una scansione lineare, con confronto sul primo
+carattere prima di quello completo. Il numero di nomi di una procedura è
+dell'ordine delle decine, e una ricerca ne tocca in media cinque, su poche linee
+di cache che restano calde fra un'istruzione e la successiva: a
+questa scala la scansione costa meno di un indice associativo, che andrebbe
+costruito e mantenuto e i cui accessi sono sparsi.
+
+La risoluzione non viene però ripetuta. L'indice di un nome è una costante del
+programma — la tabella appartiene alla procedura ed è a sola aggiunta, quindi un
+indice assegnato non cambia — e viene perciò memorizzato sull'istruzione che lo
+usa: è la tecnica che gli interpreti chiamano
+\emph{quickening}~\cite{BrunthalerQuickening,PEP659}, e a differenza di un
+indice associativo non costruisce alcuna struttura. Vale un vincolo, e non è
+formale: risolvere un nome lo \emph{inserisce}, e l'ordine di inserimento è
+osservabile nell'ordine del dump finale e nel conteggio delle celle. La cache si
+riempie dunque \emph{dopo} la risoluzione, nel punto in cui l'interprete la
+compiva comunque, e accoglie solo i risultati positivi: un nome assente in questo
+istante può comparire più tardi per una dichiarazione locale in un'altra
+attivazione, e memorizzare un fallimento darebbe una risposta stantia. Un operando
+che comincia per cifra non è un nome — lo garantisce il lessico — e per esso non
+si esegue alcuna ricerca. Sul programma di compressione resta una ricerca di
+nome ogni quattro istruzioni e mezza eseguite: le altre trovano l'indice già
+scritto accanto a sé e non cercano affatto.
+
+Nessuna struttura ha una dimensione fissata in anticipo: non la profondità di
+ricorsione, non il numero di rami di un \texttt{par}, non i parametri di una
+procedura, non i nomi che un frame può contenere né la lunghezza di ciascuno.
+Tutte crescono su richiesta, e l'unico limite che resta, sulla lunghezza di una
+riga di bytecode, è verificato e produce un errore esplicito invece di troncare.
+Un frame è così duecento byte: il vettore delle variabili e i riferimenti alla
+tabella dei nomi della sua procedura. Di frame ne esiste uno per procedura, non
+uno per attivazione: la ricorsione non ne duplica la struttura. Un nome aperto da
+$\mathtt{local}$ in un'attivazione annidata prende lo slot dell'omonimo
+dell'attivazione esterna e lo tiene da parte; il $\mathtt{delocal}$ che lo chiude
+rimette al suo posto quello esterno. È l'ombreggiamento della semantica
+(\S\ref{sec:scope}), letto direttamente nello store invece di essere imitato con
+una copia. Ciò che distingue un'attivazione dall'altra è allora solo quel poco
+che la macchina già salva sulla pila delle chiamate --- i parametri legati e la
+pila dei nomi aperti --- e per questo un secondo $\mathtt{local}$ sullo stesso
+nome nella \emph{stessa} attivazione resta l'errore che la semantica prescrive,
+mentre fra attivazioni diverse è ombreggiamento.
+
+\paragraph{Ciclo principale.} Il testo del bytecode non cambia mai durante
+l'esecuzione: è una sola istanza condivisa da tutti i rami, e una variante di
+compilazione che la mappa in sola lettura lo verifica. Tutto ciò che se ne
+ricava è dunque una costante, e va calcolato una volta. L'interprete lavora
+perciò su un vettore di istruzioni \emph{decodificate}, in cui l'indice di
+un'istruzione è il suo numero di riga meno uno: passare da un numero di riga a
+un'istruzione è dunque una sottrazione, non una scansione. La decodifica è
+pigra per procedura — una procedura mai chiamata non viene mai decodificata — e
+le posizioni degli operandi sono scostamenti, non puntatori, perché i rami
+paralleli possono lavorare su copie del programma.
 
 \begin{lstlisting}
-else if (!strcmp(fw, "PUSHEQ"))  op_pusheq (vm, fname);
-else if (!strcmp(fw, "MINEQ"))   op_mineq  (vm, fname);
-else if (!strcmp(fw, "XOREQ"))   op_xoreq  (vm, fname);
+const Insn *in = &g_ir[ip];   /* indice = riga - 1 */
+uint8_t op_tag = in->op;      /* classificato una volta sola */
+...
+if      (op_tag == INVOP_PUSHEQ) op_pusheq_ir(vm, cur_fi, in, ptr);
+else if (op_tag == INVOP_MINEQ)  op_mineq_ir (vm, cur_fi, in, ptr);
+else if (op_tag == INVOP_XOREQ)  op_xoreq_ir (vm, cur_fi, in, ptr);
 \end{lstlisting}
 
 \noindent
+La classificazione dal testo resta come ripiego, per le righe che l'array non
+copre; è uno \texttt{switch} sul primo carattere dell'opcode seguito dai soli
+confronti che quel carattere lascia possibili, quindi il suo costo non cresce
+col numero di opcode del linguaggio.
+
+\noindent
 L'inversione non richiede alcuna storia dei dati, ed è il punto in cui la
-reversibilità del linguaggio si paga da sola: l'inverso di un opcode è
-\emph{un altro opcode}, e la tavola degli inversi si scrive in quattro righe.
-Ciò che costa è ricostruire il cammino, non ripristinare i valori: quali rami
-sono stati presi, dove comincia e finisce un ciclo, quale iterazione si sta
-disfacendo.
+reversibilità del linguaggio si paga da sola: l'inverso di un comando è
+\emph{un altro comando}, e $\Inv{\cdot}$ lo calcola dall'albero sintattico. Il
+corpo inverso è quindi bytecode come l'altro, prodotto una volta in
+compilazione, ed eseguito dallo stesso ciclo (\S\ref{sec:call}). Nessuna
+struttura di controllo va ricostruita a tempo di esecuzione: dove comincia un
+ciclo e quale ramo è stato preso sono domande che il corpo inverso non pone,
+perché la risposta è già scritta nella sua forma. È l'invariante del ciclo a
+renderlo possibile, ed è la ragione per cui le asserzioni non sono
+diagnostica accessoria.
 
 \section{Il parallelismo}
 
@@ -1928,25 +2316,73 @@ lo sveglia, e lo scambio avviene: è il rendez-vous di \textsc{Par-Comm}.
 \medskip
 \noindent
 Non condividere lo store non basta però a rendere i rami indipendenti: lo
-diventano solo se non condividono nulla \emph{nemmeno nell'esecutore}. Tre
-strutture stanno sul cammino di ogni ramo e vanno tenute per thread o toccate
-con operazioni atomiche: lo stato della tokenizzazione, che è per thread; il
-rilevatore di scritture concorrenti su una cella intera, che vive nella cella e
-non in un lock unico; e l'indice che associa a ciascun ramo la propria copia del
-frame di una procedura, che si consulta senza esclusione perché è a sola
-aggiunta e pubblica ogni voce solo quando è completa. Sono i punti in cui una
-struttura globale, anche solo di servizio, annullerebbe il parallelismo che il
-linguaggio garantisce.
+diventano solo se non condividono nulla \emph{nemmeno nell'esecutore}. Quattro
+strutture stanno sul cammino di ogni ramo, e ciascuna è per thread o si tocca
+con operazioni atomiche: lo stato della tokenizzazione; il rilevatore di
+scritture concorrenti su una cella intera, che vive nella cella e non in un lock
+unico; l'indice dei nomi, che si consulta senza esclusione perché è a sola
+aggiunta e pubblica ogni voce solo quando è completa, e prende il lock soltanto
+per inserire; e la modalità di soppressione dell'output durante il replay in
+avanti, che è una proprietà dell'esecuzione di un singolo ramo.
+
+Il criterio che le accomuna non è che tocchino i dati, visto che l'ultima non li
+tocca, ma che una copia sola condivisa fra i rami renderebbe il risultato
+dipendente dall'interleaving. Per lo store lo vieta il linguaggio; per le strutture di
+servizio dell'esecutore deve provvedere l'implementazione, e la confluenza vale
+sull'osservabile solo se provvede a tutte.
 
 \medskip
 \noindent
-Un costo resta, ed è la copia del bytecode: ogni ramo ne riceve una completa,
-perché la tokenizzazione scrive terminatori dentro il testo e due thread sullo
-stesso buffer si corromperebbero. Per i programmi di \cref{chap:programmare}
-sono diciotto kilobyte per ramo, poche centinaia di microsecondi su esecuzioni
-di secondi: si toglierebbe copiando la sola riga in lavorazione, ma non è lì che
-si gioca il parallelismo. Il guadagno misurato resta infatti sotto il numero di
-rami, e la distanza non ha una spiegazione già pronta.
+Del bytecode esiste una sola istanza, che tutti i rami leggono. È possibile
+perché il testo del programma porta soltanto istruzioni: ogni stato vive nei
+frame, quindi nessuno ha ragione di scrivere nel programma, e ciò che serve a
+delimitare una riga (dove comincia e quanto è lunga) sta nell'indice costruito
+dopo la normalizzazione. Chi deve tokenizzare copia la riga in un buffer
+proprio, perché la tokenizzazione della libreria C sostituisce i separatori con
+terminatori, e quella copia è dell'ordine delle decine di byte invece che
+dell'intero programma.
+
+La proprietà è verificata e non solo dichiarata: una modalità di collaudo mette
+il programma normalizzato in una regione di memoria protetta in sola lettura, e
+un'eventuale scrittura fa terminare il processo nel punto esatto in cui avviene.
+Sull'intero insieme dei programmi di prova non se ne verifica nessuna.
+
+\section{Il debugger DAP}
+
+L'interprete espone un'interfaccia di debug, e sopra di essa un'estensione per
+Visual Studio Code\footnote{\url{https://github.com/nicologiuliani6/kairos-vscode-debugger}}
+parla il Debug Adapter Protocol, il protocollo con cui l'editor dialoga con un
+debugger qualunque. Si mettono punti di interruzione sul sorgente Kairos, si
+percorre l'esecuzione in avanti e all'indietro un passo per volta o fino al
+punto di interruzione successivo, si ispezionano le variabili mentre cambiano e
+si legge l'output del programma nella console di debug.
+
+Il collegamento fra i due lati è ciò che il bytecode testuale rende immediato:
+ogni riga porta il numero della riga sorgente da cui proviene
+(\S\ref{sec:interprete}), quindi un punto di interruzione posto sul sorgente
+diventa una condizione sulle righe eseguite, senza una tabella di corrispondenza
+da costruire e tenere allineata. Lo stato mostrato all'editor è lo stesso store
+dell'esecuzione, serializzato quando l'editor lo chiede: non una copia tenuta
+aggiornata in parallelo, ma il frame corrente letto in quel momento.
+
+\medskip
+\noindent
+Il movimento all'indietro è ciò che distingue questo debugger da uno ordinario,
+e non è un'aggiunta all'interfaccia: un passo indietro esegue l'\emph{inversa}
+dell'ultima istruzione, cioè la stessa direzione di esecuzione che il linguaggio
+possiede. L'inverso di un'operazione sui dati è un'altra operazione sui dati, e
+le istruzioni di controllo non toccano lo store, quindi all'indietro sono solo
+posizione. Un debugger a viaggio nel tempo in un linguaggio ordinario deve
+registrare e riprodurre; qui non c'è nulla da registrare, perché l'informazione
+per tornare indietro è già nello stato.
+
+Un vincolo di realizzazione merita di essere detto, perché non è accidentale: il
+passo indietro avviene dentro il ciclo dell'interprete e non nello strato che
+parla il protocollo. Il puntatore all'istruzione corrente vive nel primo, e
+modificare lo store dal secondo lo lascerebbe fermo dov'era, con posizione e
+memoria che raccontano due storie diverse. Attraversare il confine di una
+chiamata è il caso che resta fuori: richiede di ricostruire il record di
+attivazione, che non è parte dello store ma della macchina che lo esegue.
 
 % ======================================================================
 \chapter{Lavori correlati}
@@ -2068,15 +2504,12 @@ possibile e ciò che servirebbe a un compressore vero, e i due algoritmi dello
 standard zip lo mostrano in modo opposto. La compressione a dizionario regge:
 nella versione reversibile di riferimento gira in $\Theta(n)$, come la migliore
 irreversibile, quindi la reversibilità non costa nulla in complessità. La
-trasformata no: costa $O(n^3)$ già con gli array, e qui $O(n^4)$ perché
-l'accesso per indice è emulato sopra gli stack. Due cose lo colmerebbero, ed è
-la direzione che indicheremmo per prima. La prima è un tipo array nel
-linguaggio, con le sue regole nella semantica: toglierebbe il fattore $n$ e
-allineerebbe il costo a quello del lavoro di riferimento. La seconda è un
-ordinamento delle rotazioni migliore di quello ingenuo, che è il punto su cui
-quel lavoro stesso dichiara che i miglioramenti restano necessari. Finché
-entrambe mancano, i blocchi restano corti, e con blocchi corti la trasformata
-non ha il materiale su cui produrre l'effetto per cui esiste. Manca inoltre la
+trasformata no: costa $O(n^3)$, ed è l'esponente che misuriamo. Resta però
+$O(n^3)$, cioè l'ordinamento ingenuo delle rotazioni, che è il punto su cui il
+lavoro di riferimento stesso dichiara che i miglioramenti sono possibili e
+necessari: un ordinamento migliore è la direzione che indicheremmo per prima.
+Finché manca, i blocchi restano corti, e con blocchi corti la trasformata non ha
+il materiale su cui produrre l'effetto per cui esiste. Manca inoltre la
 proprietà \emph{clean} nel senso stretto: le strutture ausiliarie si azzerano
 disfacendo le procedure che le hanno prodotte, ma l'ingresso sopravvive
 all'uscita, mentre un compressore deve consumarlo.
@@ -2094,15 +2527,32 @@ naturale, con l'avvertenza che non è un'aggiunta indolore: cambia ciò che si
 può dimostrare sull'inversione, perché un messaggio in transito è stato che il
 rendez-vous non produce.
 
-\paragraph{L'implementazione.} Il guadagno del calcolo concorrente cresce con il
-numero di rami ma resta sotto di esso, e la distanza non ha una spiegazione già
-pronta: individuare gli altri punti in cui l'esecutore condivide ciò che il
-linguaggio tiene separato è lavoro di misura prima che di progetto. Sul fronte
-della memoria, un frame costa oltre due megabyte quasi indipendentemente da
-quante variabili contenga, perché le tabelle dei nomi sono dimensionate
-staticamente; dimensionarle sul programma è l'intervento singolo che cambierebbe
-di più il profilo d'occupazione, e diventa vincolante appena la ricorsione
-richiede istanze separate dello stesso frame.
+\paragraph{L'implementazione.} Sul calcolo concorrente la misura dice che il
+parallelismo si realizza, con l'ottantanove per cento del massimo che la macchina
+di prova rende disponibile, e indica nella frazione sequenziale del programma, cioè
+nel raccoglitore che riceve dai canali uno per volta, il candidato per la parte
+restante. Non dice però fin dove il guadagno cresca: servono una macchina con più
+nuclei e un raccoglitore ad albero, e sono due esperimenti, non due congetture.
+
+Nella direzione opposta, quella in cui l'interprete aderisce al modello, ciò che
+la semantica descrive come una sola istanza è una sola istanza anche
+nell'esecutore. Il testo del programma è condiviso, perché porta solo
+istruzioni e nessuno stato; l'inversione lo è a sua volta, perché il corpo
+inverso è bytecode prodotto in compilazione e $\mathtt{uncall}$ non costruisce
+alcun contesto temporaneo; e lo store è una sola istanza anche lui. Un frame
+appartiene alla procedura, non all'attivazione: la ricorsione non ne duplica la
+struttura, e i nomi che $\mathtt{local}$ apre in un'attivazione ombreggiano gli
+omonimi di quelle esterne, come nella semantica. Ciò che resta separato è
+separato perché il linguaggio lo prescrive: i rami di un $\mathtt{par}$ operano
+su porzioni disgiunte dello store, e lì la separazione non è una copia di
+comodo.
+
+Resta una sola eccezione, e non è una scorciatoia dell'esecutore ma l'ipotesi
+sotto cui $\Inv{\mathtt{par}}$ è definita: quando un canale viaggia dentro un
+messaggio i suoi titolari non sono più fissati dal testo, e il corpo inverso di
+un $\mathtt{par}$ non si calcola in compilazione. Sono due programmi su
+ottantanove, e per quei due l'inversione resta affidata al motore dinamico, che
+accoppia gli appuntamenti mentre esegue invece di prevederli.
 
 \paragraph{Il confronto che manca.} Il criterio di correttezza adottato qui è la
 reversibilità con la confluenza che ne discende; la letteratura sui linguaggi

@@ -30,6 +30,11 @@
 }
 \lstset{style=kairos}
 \usepackage[italian]{babel}
+% Il greco serve per due parole sole (l'etimologia di Kairos). Questa
+% installazione di TeX non ha i font LGR ne' babel-greek, quindi le lettere si
+% compongono in matematica, che e' sempre disponibile.
+\newcommand{\kairosgr}{\ensuremath{\kappa\alpha\iota\rho\acute{o}\varsigma}}
+\newcommand{\chronosgr}{\ensuremath{\chi\rho\acute{o}\nu o\varsigma}}
 \usepackage{tikz}
 \usepackage{parskip}
 
@@ -76,7 +81,7 @@
 \usepackage{hyperref}
 \hypersetup{colorlinks=true,urlcolor=blue!55!black,linkcolor=blue!55!black,
             citecolor=blue!55!black}
-\usepackage[capitalize,noabbrev]{cleveref}
+\usepackage[italian,capitalize,noabbrev]{cleveref}
 
 % ======================================================================
 %  Notazione propria
@@ -90,6 +95,7 @@
 % chiamata: si cambia solo qui.
 \newcommand{\cfg}[2]{\langle #2,\, #1 \rangle}          % argomenti (c,sigma) -> reso <sigma, c>
 \newcommand{\upd}[3]{#1[#2 \mapsto #3]}                 % sigma[v -> n]
+\newcommand{\updc}[4]{#1[#2\langle #3\rangle \mapsto #4]}  % sigma[a<k> -> n]: sola cella k
 \newcommand{\toe}{\to_e}
 \newcommand{\tob}{\to_b}
 \newcommand{\toc}{\to_c}

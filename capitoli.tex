@@ -1956,9 +1956,6 @@ $n$ & tempo (log)\\
   % tacche su n
   \foreach \X/\L in {0.085/12, 0.5/16, 0.822/20, 1.085/24, 1.307/28, 1.5/32}
     \draw (\X,0) -- (\X,-0.09) node[below,font=\footnotesize] {\L};
-  % tacche sul tempo (secondi, raddoppi)
-  \foreach \Y/\L in {1/{0{,}0625\,s}, 2/{0{,}125\,s}, 3/{0{,}25\,s}, 4/{0{,}5\,s}, 5/{1\,s}}
-    \draw (-0.08,\Y) -- (-0.13,\Y) node[left,font=\footnotesize] {\L};
   % retta dei minimi quadrati, pendenza 3,03
   \draw[thick,gray!70] (0,0.219) -- (1.6,5.067);
   % punti misurati

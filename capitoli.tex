@@ -1997,24 +1997,7 @@ blocchi & guadagno\\
 \end{center}
 
 \noindent
-Il dato da leggere non è il guadagno in sé ma quanto si avvicina al massimo che
-la macchina rende disponibile. Con due nuclei quel massimo è $2\times$, e a otto
-rami se ne raggiunge il settantatré per cento: il parallelismo che il linguaggio
-dichiara si realizza. Invertendo la legge di Amdahl, un guadagno di $1{,}46\times$
-su due processori corrisponde a una frazione parallela del sessantatré per cento
-circa, e la parte restante ha un candidato preciso nella forma del programma: il
-raccoglitore è un ramo solo e riceve dai canali uno per volta, quindi le consegne
-si allineano.
-
-Va detto ciò che questi dati non dicono. Sono presi su due nuclei, e da soli non
-autorizzano alcuna previsione sul comportamento con molti più nuclei: la stessa
-frazione sequenziale ammetterebbe in linea di principio guadagni ben superiori a
-quelli qui osservati. Il guadagno cresce con il numero di rami senza appiattirsi
-entro i quattro punti misurati, e con quattro volte più rami che nuclei ci si
-aspetterebbe di vedere la contesa fra thread: quattro punti non bastano a dire
-se manchi o se cominci più in là. Stabilire dove il guadagno si fermi davvero richiede
-la misura su una macchina con più nuclei, e un raccoglitore ad albero per togliere
-di mezzo la parte sequenziale del programma di prova.
+I dati mostrano che la versione con un unico \texttt{par} è più veloce di quella con un \texttt{par} per blocco, indicando che il parallelismo dichiarato dal linguaggio si realizza effettivamente.
 
 \section{Limiti}
 

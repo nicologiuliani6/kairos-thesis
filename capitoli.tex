@@ -1935,14 +1935,14 @@ lunghezza $n$:
 \centering
 \begin{tabular}{ll}
 \hline
-$n$ & tempo\\
+$n$ & tempo (log)\\
 \hline
-12 & 0{,}04 s\\
-16 & 0{,}10 s\\
-20 & 0{,}20 s\\
-24 & 0{,}35 s\\
-28 & 0{,}56 s\\
-32 & 0{,}87 s\\
+12 & 0{,}500\\
+16 & 1{,}725\\
+20 & 2{,}692\\
+24 & 3{,}491\\
+28 & 4{,}168\\
+32 & 4{,}792\\
 \hline
 \end{tabular}
 \end{minipage}%
@@ -1959,16 +1959,24 @@ $n$ & tempo\\
   % tacche sul tempo (secondi, raddoppi)
   \foreach \Y/\L in {1/{0{,}0625\,s}, 2/{0{,}125\,s}, 3/{0{,}25\,s}, 4/{0{,}5\,s}, 5/{1\,s}}
     \draw (-0.08,\Y) -- (-0.13,\Y) node[left,font=\footnotesize] {\L};
+  % retta dei minimi quadrati, pendenza 3,03
+  \draw[thick,gray!70] (0,0.219) -- (1.6,5.067);
   % punti misurati
   \foreach \X/\Y in {0.085/0.500, 0.5/1.725, 0.822/2.692, 1.085/3.491, 1.307/4.168, 1.5/4.792}
     \fill (\X,\Y) circle (1.7pt);
+  \node[font=\footnotesize,anchor=west] at (0.62,1.30) {pendenza $3{,}03$};
 \end{tikzpicture}
 \end{minipage}
 \end{center}
 
 \noindent
-Gli assi sono logaritmici, quindi l'allineamento dei punti indica che il costo è
-una legge di potenza. È ciò che ci si aspetta dalla forma del programma: l'ordinamento a bolle compie $O(n^2)$ confronti fra rotazioni, e ciascun confronto ne scandisce $O(n)$ caratteri.
+Gli assi sono logaritmici, quindi l'allineamento dei punti dice che il costo è
+una legge di potenza e la pendenza ne dà l'esponente. La retta di regressione di
+$\log t$ su $\log n$ ha pendenza $3{,}03$: il costo è $n^3$, lo stesso del lavoro
+di riferimento, e l'accesso per indice non aggiunge nulla all'ordine di
+grandezza. È quello che ci si aspetta dalla forma
+del programma: l'ordinamento a bolle compie $O(n^2)$ confronti fra rotazioni, e
+ciascun confronto ne scandisce $O(n)$ caratteri.
 
 \paragraph{Concorrenza.} Lo stesso calcolo in due varianti che differiscono in
 un solo punto, la procedura che orchestra i blocchi. Nella prima ogni blocco sta
@@ -1979,20 +1987,27 @@ rami di un unico \texttt{par}, con il raccoglitore come ultimo ramo. Con $n=8$,
 su una macchina a \emph{due} nuclei:
 
 \begin{center}
-\begin{tabular}{lll}
+\begin{tabular}{ll}
 \hline
-blocchi & un \texttt{par} per blocco (s) & un \texttt{par} solo (s)\\
+blocchi & guadagno\\
 \hline
-2 & 0{,}71 & 0{,}62\\
-4 & 1{,}49 & 1{,}11\\
-6 & 2{,}21 & 1{,}67\\
-8 & 2{,}87 & 1{,}96\\
+2 & 1{,}16$\times$\\
+4 & 1{,}34$\times$\\
+6 & 1{,}32$\times$\\
+8 & 1{,}46$\times$\\
 \hline
 \end{tabular}
 \end{center}
 
 \noindent
-I dati mostrano che la versione con un unico \texttt{par} è più veloce di quella con un \texttt{par} per blocco, indicando che il parallelismo dichiarato dal linguaggio si realizza effettivamente.
+Il dato da leggere non è il guadagno in sé ma quanto si avvicina al massimo che
+la macchina rende disponibile. Con due nuclei quel massimo è $2\times$, e a otto
+rami se ne raggiunge il settantatré per cento: il parallelismo che il linguaggio
+dichiara si realizza. Invertendo la legge di Amdahl, un guadagno di $1{,}46\times$
+su due processori corrisponde a una frazione parallela del sessantatré per cento
+circa, e la parte restante ha un candidato preciso nella forma del programma: il
+raccoglitore è un ramo solo e riceve dai canali uno per volta, quindi le consegne
+si allineano.
 
 Va detto ciò che questi dati non dicono. Sono presi su due nuclei, e da soli non
 autorizzano alcuna previsione sul comportamento con molti più nuclei: la stessa

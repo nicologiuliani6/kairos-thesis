@@ -302,7 +302,12 @@ renderebbe l'operazione non iniettiva proprio dove serve che lo sia.
 \paragraph{Condizioni $b \in \mathit{Cond}$.}
 \begin{align*}
 b ::= e = e \mid e \neq e \mid e \geq e \mid e \leq e \mid e > e \mid e < e
+  \mid b \land b \mid b \lor b
 \end{align*}
+
+\noindent
+I connettivi $\land$ e $\lor$ sono quelli di Janus: una guardia può combinare
+più confronti, come in $(\mathit{try} = 0) \land (\mathit{num} > 1)$.
 
 \paragraph{Comandi $c \in \mathit{Com}$.}
 \begin{align*}
@@ -1465,96 +1470,49 @@ escludendo \texttt{par}, $\toc$ è deterministica e $c$ denota una funzione
 parziale \emph{iniettiva}; di conseguenza
 $\cfg{c\,;\,\Inv{c}}{\sigma} \toc^{*} \sigma$ (identità sullo store).
 
-Il determinismo non è un'osservazione a parte: comando per comando, le
-premesse delle sue regole (successo ed $\err$) sono a due a due incompatibili
-e la loro unione copre ogni $\sigma$ possibile, sono cioè una
-\textbf{partizione} dello spazio degli stati, quindi esattamente una regola
-si applica in ogni configurazione. Ad esempio per $\mathtt{pop}$:
-$\sigma(v)\neq 0$ (\textcolor{red!60!black}{\textsc{Pop-Err2}}), $\sigma(v)=0 \land \sigma(s)=\varepsilon$
-(\textcolor{red!60!black}{\textsc{Pop-Err}}), $\sigma(v)=0 \land \sigma(s)=n : \ell$ (\textsc{Pop})
-coprono ogni $\sigma$ esattamente una volta, senza sovrapposizioni. Fa
-eccezione solo la sincronizzazione di canale (\S\ref{sec:chan}): lì la
-partizione locale resta valida (\textcolor{red!60!black}{\textsc{Srecv-Err}} copre comunque
-esattamente il proprio caso), ma \textsc{Par-Comm} può temporaneamente non
-trovare un ramo partner pronto, lasciando nessuna regola applicabile: è il
-blocco di sincronizzazione, non una
-rottura del determinismo: nessuna configurazione ha mai \emph{due} regole
-applicabili contemporaneamente.
+Il determinismo viene dalle regole stesse: per ogni comando le premesse delle sue
+regole, di successo e d'errore, si escludono a vicenda e insieme coprono ogni
+stato, quindi in ogni configurazione se ne applica esattamente una. Per
+$\mathtt{pop}$, ad esempio, i casi $\sigma(v) \neq 0$
+(\textcolor{red!60!black}{\textsc{Pop-Err2}}), $\sigma(v) = 0 \land \sigma(s) =
+\varepsilon$ (\textcolor{red!60!black}{\textsc{Pop-Err}}) e $\sigma(v) = 0 \land
+\sigma(s) = n : \ell$ (\textsc{Pop}) non si sovrappongono e non lasciano buchi.
+L'unica eccezione è \textsc{Par-Comm}, che può non trovare subito il partner: è
+un'attesa, non una scelta fra due regole.
 
-\medskip
+\paragraph{Dimostrazione (traccia).} Per induzione strutturale su $c$.
+
+\begin{itemize}
+  \item \textbf{Assegnamenti.} $v \mathbin{+\!\!=} e$ e $v \mathbin{-\!\!=} e$ si
+    annullano perché $v \notin e$, quindi $e$ ha lo stesso valore nei due versi;
+    $\mathbin{\hat{}\!=}$ e $\mathbin{<\!=\!>}$ sono involuzioni.
+  \item \textbf{Stack e canali.} $\mathtt{push}$ e $\mathtt{pop}$ si annullano per
+    la convenzione \emph{zero-cleared}: \textsc{Pop} richiede il bersaglio a $0$ e
+    \textsc{Push} lo lascia a $0$. Lo stesso vale per $\mathtt{ssend}$ e
+    $\mathtt{srecv}$: il mittente si azzera come in \textsc{Push}, il ricevente
+    parte da $0$ come in \textsc{Pop}.
+  \item \textbf{Condizionale e ciclo.} La doppia guardia fa sì che all'indietro
+    si prenda lo stesso ramo e si ripetano le stesse iterazioni.
+  \item \textbf{Parallelo.} Ogni passo di una derivazione di
+    $\mathtt{par}\ c_1\ \mathtt{and}\ c_2\ \mathtt{rap}$ avanza un solo ramo
+    oppure, con \textsc{Par-Comm}, entrambi insieme. Un passo locale si inverte
+    per ipotesi induttiva, indipendentemente dall'altro ramo, perché i rami
+    toccano variabili disgiunte. Un passo \textsc{Par-Comm} si inverte con lo
+    stesso \textsc{Par-Comm} a ruoli scambiati: lo stato che produce soddisfa
+    esattamente le premesse del rendez-vous opposto, che riporta a $\sigma$.
+\end{itemize}
+
 \noindent
-La dimostrazione è per induzione strutturale su $c$ (equivalentemente, sulla
-derivazione di $\cfg{c}{\sigma} \toc^{*} \sigma'$): nei casi base
-gli assegnamenti si annullano per i vincoli $v \notin e$
-(\textsc{Add2}$\leftrightarrow$\textsc{Sub2}) o sono involuzioni
-($\mathbin{\hat{}\!=}$, $\mathbin{<\!=\!>}$); $\mathtt{push}/\mathtt{pop}$ si
-annullano per la convenzione \emph{zero-cleared}: \textsc{Pop} richiede in
-ingresso che il bersaglio sia già $0$, e \textsc{Push} lo ristabilisce
-esattamente in uscita. $\mathtt{ssend}/\mathtt{srecv}$ (via
-\textsc{Par-Comm}, \S\ref{sec:par}) si annullano per la \textbf{stessa}
-convenzione, applicata alla coppia di rami invece che a un solo comando: la
-premessa $\sigma(\bar w) = \bar 0$ sul lato ricevente ed effetto $\bar
-w \mapsto \bar n$ sono zero-cleared esattamente come \textsc{Pop}, e l'effetto
-$\bar v \mapsto \bar 0$ sul lato mittente è zero-cleared esattamente come
-\textsc{Push}: è ciò che rende $\mathtt{ssend}\,;\,\mathtt{srecv}$
-l'identità anche sulle variabili coinvolte, non solo un'astrazione sul
-canale;
-nei casi induttivi la doppia guardia di \texttt{if}/\texttt{from} garantisce
-che l'esecuzione inversa ripercorra lo stesso ramo / le stesse iterazioni.
+Resta da vedere perché l'esecuzione all'indietro accoppi sempre gli
+appuntamenti giusti. È il vincolo di sessione binaria: un canale ha due soli
+titolari, quindi ogni $\mathtt{srecv}$ ha un solo $\mathtt{ssend}$ possibile, in
+avanti come all'indietro, e non c'è un terzo ramo con cui sbagliare. Serve però
+che i titolari siano quelli scritti nel testo: se un canale viaggia dentro un
+messaggio, li acquisisce a tempo di esecuzione, ed è il caso escluso sopra.
 
-\smallskip
-\noindent
-Il caso induttivo \texttt{par}: sia $\cfg{\mathtt{par}\ c_1\ \mathtt{and}\
-c_2\ \mathtt{rap}}{\sigma} \toc^{n} \sigma'$ una derivazione di lunghezza $n$.
-Ogni passo è o un passo \textsc{Par-L}/\textsc{Par-L0} (risp.
-\textsc{Par-R}/\textsc{Par-R0}) che avanza \emph{un solo} ramo di un passo
-ordinario locale (esattamente uno dei casi già trattati sopra) o un passo
-\textsc{Par-Comm} (\S\ref{sec:par}) che avanza \emph{entrambi} i rami insieme
-in una sincronizzazione di canale. Per IH ogni passo locale del primo tipo è
-invertito esattamente da $\Inv{\cdot}$ applicato al comando ridotto in quel
-passo, indipendentemente da cosa contenga in quel momento l'altro ramo: le
-variabili \texttt{int}/\texttt{stack} sono disgiunte tra rami
-(\S\ref{sec:par}). Per il secondo tipo, \textsc{Par-Comm} stessa mostra come
-si inverte: le sue premesse sono $\sigma(\bar v) = \bar n$ (lato mittente) e
-$\sigma(\bar w) = \bar 0$ (lato ricevente), la conclusione è $\sigma[\bar
-v \mapsto \bar 0][\bar w \mapsto \bar n]$ (dallo stato risultante,
-$\sigma(\bar w) = \bar n \neq \bar 0$ e $\sigma(\bar v) = \bar 0$ sono
-esattamente le premesse per rieseguire \textsc{Par-Comm} con mittente e
-ricevente scambiati, cioè con $\mathtt{ssend} \leftrightarrow \mathtt{srecv}$
-scambiati in ciascun ramo), che riporta esattamente a $\sigma$.
-
-Percorrendo la derivazione all'indietro passo per passo, nell'ordine esatto
-inverso a quello forward, e invertendo ad ogni passo ciò che lo ha compiuto
-(un ramo solo per \textsc{Par-L}/\textsc{Par-R}, entrambi per
-\textsc{Par-Comm}), si ricostruisce $\sigma$: questo è esattamente ciò che
-$\Inv{\mathtt{par}\ c_1\ \mathtt{and}\ c_2\ \mathtt{rap}} = \mathtt{par}\
-\Inv{c_1}\ \mathtt{and}\ \Inv{c_2}\ \mathtt{rap}$ realizza staticamente.
-Resta da giustificare perché l'esecuzione all'indietro trovi \emph{sempre}
-questo percorso, e non un altro: non basta che un percorso corretto esista. Con più di due rami candidati su un canale un'esecuzione all'indietro
-potrebbe accoppiare i passi con il partner sbagliato, esattamente il tipo di
-errore che il vincolo di sessione binaria evita per costruzione. Con
-\textbf{esattamente due} rami sul canale (\S\ref{sec:chan}), e purché siano i
-due che il testo del programma indica --- è qui che serve l'ipotesi sopra: un
-canale che viaggia dentro un messaggio i suoi titolari li acquisisce a tempo di
-esecuzione ---, l'accoppiamento è
-\textbf{unico}, non frutto di un interleaving fortunato: a ogni istante
-\textsc{Par-Comm} può combinare solo l'offerta corrente del ramo mittente
-con quella del ramo ricevente, perché non ce n'è un terzo con cui
-confondersi: non c'è scelta di interleaving da sbagliare. Questo vale
-identicamente in avanti e all'indietro: invertire scambia
-$\mathtt{ssend} \leftrightarrow \mathtt{srecv}$ in ciascun ramo (sopra) e ne
-inverte l'ordine dei comandi ($\Inv{c_1\,;\,c_2} = \Inv{c_2}\,;\,\Inv{c_1}$),
-ma non introduce mai un terzo candidato partner. È il complemento
-all'indietro della confluenza dimostrata in \S\ref{sec:par-conf} per gli
-interleaving forward che non toccano canali: lì la confluenza viene dalla
-\emph{disgiunzione} (rami che non toccano canali operano su porzioni
-disgiunte dello store, i loro passi commutano); qui viene dalla
-\textbf{linearità} del canale (esattamente due estremità, \S\ref{sec:chan}),
-che rende l'unico partner possibile sempre univoco. In entrambi i casi non
-serve registrare la storia dell'esecuzione: la doppia guardia la evita nei
-casi sequenziali di \texttt{if}/\texttt{from} (sopra), la disgiunzione delle
-variabili la evita nel \texttt{par} forward, e la sessione binaria la evita
-nella sincronizzazione di canale, in avanti e all'indietro.
+In tutti i casi la storia dell'esecuzione non va registrata: la evitano la
+doppia guardia per \texttt{if}/\texttt{from}, la disgiunzione delle variabili
+per i rami di \texttt{par}, la sessione binaria per i canali.
 
 \medskip
 \noindent
@@ -1718,10 +1676,12 @@ su programmi che non abbiamo scritto noi. Il report originale del
 linguaggio~\cite{LutzDerby1982} ne contiene tre: la radice intera, un
 ordinamento a bolle con permutazione e la fattorizzazione di un intero. Sono del
 1982, e la loro ortografia non è quella di oggi — il commento è \texttt{;}, lo
-scambio \texttt{:}, la disuguaglianza \texttt{\#}, il resto
-\texttt{\textbackslash}, e le variabili sono globali invece che parametri — ma
-la struttura è la stessa, e tradurli è una sostituzione di simboli, non una
-riscrittura.
+scambio \texttt{:}, l'uguaglianza \texttt{=}, la disuguaglianza \texttt{\#}, il
+resto \texttt{\textbackslash}, la congiunzione \texttt{\&}, e le variabili sono
+globali invece che parametri — ma la struttura è la stessa, e tradurli è una
+sostituzione di simboli, non una riscrittura. Restano fuori solo le procedure
+che leggono i dati dal terminale, perché Kairos non ha un'istruzione di
+lettura.
 
 \paragraph{La radice intera gira in entrambe le direzioni.} Consuma
 $\mathit{num}$ producendo $\mathit{rt} = \lfloor\sqrt{\mathit{num}}\rfloor$; la
@@ -1756,16 +1716,16 @@ proseguirebbe e l'errore comparirebbe molto più tardi, come un valore sbagliato
 alla chiusura di una variabile. Del listato resta perciò la sola procedura che
 costruisce la permutazione identità, che è un programma Janus valido e usa un
 array come parametro: la chiamata lo riempie con $0,\dots,n-1$, la
-$\mathtt{uncall}$ lo riazzera. La fattorizzazione, il terzo programma, non è
-stata tradotta.
+$\mathtt{uncall}$ lo riazzera.
 
-\medskip
-\noindent
-Ai due si aggiunge un programma scritto per l'occasione, che esercita tutte e
-sei le forme delle clausole facoltative di $\mathtt{if}$ e $\mathtt{from}$
-(\S\ref{sec:sintassi}) con le asserzioni che devono reggere. I tre stanno nel
-corpus di verifica insieme agli altri, quindi la conformità non è
-un'osservazione fatta una volta ma un controllo che accompagna ogni modifica.
+\paragraph{La fattorizzazione gira in entrambe le direzioni.} Consuma
+$\mathit{num}$ e lascia i suoi fattori primi, in ordine crescente, in un array:
+$840$ diventa $2, 2, 2, 3, 5, 7$ e $\mathit{num}$ va a zero; la
+$\mathtt{uncall}$ ricompone $840$ dai fattori e riazzera la tabella. È il più
+completo dei tre: due cicli annidati, una guardia d'ingresso con la congiunzione,
+lo scambio fra una cella e una variabile per mettere da parte l'ultimo primo, e
+la $\mathtt{uncall}$ di una procedura dentro un ciclo per riportare a zero il
+divisore di prova.
 
 % ======================================================================
 \chapter{Programmare in Kairos: compressione lossless reversibile}

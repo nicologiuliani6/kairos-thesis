@@ -2163,53 +2163,30 @@ argomenti.
 \end{lstlisting}
 
 \noindent
-Il salto iniziale è ciò che realizza la traccia $c_1\,[c_2\,c_1]^{*}$: alla
-prima entrata il secondo corpo viene scavalcato, e ci si torna solo dal
-\emph{back-edge}.
+Il salto iniziale realizza la traccia $c_1\,[c_2\,c_1]^{*}$: alla prima entrata
+il secondo corpo viene scavalcato, e ci si torna solo dal back-edge.
 
-Le due asserzioni del ciclo (\cref{sec:loop}) — $b_1$ vera alla prima entrata,
-\textsc{LoopError1}, e falsa a ogni ri-entrata, \textsc{LoopError2} — sono
-emesse come opcode dedicati, e abortiscono l'esecuzione quando cadono. Non sono
-diagnostica accessoria: è quell'invariante a rendere il ciclo invertibile per
-sola sintassi, perché senza di esso l'inversa
-$\mathtt{from}\ b_2\ \mathtt{do}\ \Inv{c_1}\ \mathtt{loop}\ \Inv{c_2}\
-\mathtt{until}\ b_1$ uscirebbe dopo una iterazione mentre l'originale ne compie
-$n$. L'implementazione di riferimento di Janus adotta la stessa scelta:
-\texttt{assertTrue} prima della prima iterazione e \texttt{assertFalse} dopo
-ogni corpo \emph{loop}~\cite{YokoyamaGluck2007}.
+Le due asserzioni del ciclo (\cref{sec:loop}) --- $b_1$ vera alla prima entrata
+(\textsc{LoopError1}) e falsa a ogni rientro (\textsc{LoopError2}) --- sono
+istruzioni dedicate che interrompono l'esecuzione quando falliscono. Servono
+all'inversione: senza di esse l'inverso $\mathtt{from}\ b_2\ \mathtt{do}\
+\Inv{c_1}\ \mathtt{loop}\ \Inv{c_2}\ \mathtt{until}\ b_1$ potrebbe uscire dopo
+un'iterazione mentre l'originale ne compie $n$. L'implementazione di riferimento
+di Janus fa la stessa scelta~\cite{YokoyamaGluck2007}.
 
-L'inverso di una procedura si ottiene in un modo solo, ed è quello della
-\cref{sec:call}: si applica $\Inv{\cdot}$ all'albero sintattico e si emette un
-secondo corpo, dentro la stessa procedura, che l'esecuzione diretta scavalca con
-un salto e a cui $\mathtt{uncall}$ entra per etichetta. Da lì in poi
-$\mathtt{uncall}$ è una normale esecuzione in avanti: stesso ciclo, stesso
-frame, stessi parametri, e nessuna macchina separata che percorra il programma
-al contrario cercando di dedurne la struttura.
+L'inverso di una procedura si calcola in compilazione (\cref{sec:call}): si applica $\Inv{\cdot}$
+all'albero sintattico e si emette un secondo corpo, nella stessa procedura, che
+l'esecuzione diretta scavalca e in cui $\mathtt{uncall}$ entra. Da lì
+$\mathtt{uncall}$ è una normale esecuzione in avanti, con lo stesso ciclo, lo
+stesso frame e gli stessi parametri.
 
-Il $\mathtt{par}$ non fa eccezione: il corpo inverso di una procedura che ne
-contiene uno è $\mathtt{par}\ \Inv{c_1}\ \mathtt{and}\ \dots\ \mathtt{and}\
-\Inv{c_n}\ \mathtt{rap}$, cioè la regola del \cref{chap:reversibilita} applicata
-alla lettera --- rovesciando l'ordine dentro ogni ramo si rovescia la successione
-degli appuntamenti, e i due estremi di ciascuno restano l'uno di fronte
-all'altro. Vale a una condizione, ed è la stessa da cui viene l'unicità
-dell'accoppiamento: che i titolari di ogni canale siano fissati dal testo. Se un
-canale viaggia \emph{dentro} un messaggio --- $\mathtt{ssend}(\langle x,
-\mathit{ch}_2\rangle, \mathit{ch}_1)$, la mobilità del $\pi$-calcolo --- la
-titolarità di $\mathit{ch}_2$ nasce invece da un appuntamento precedente su
-$\mathit{ch}_1$, e rovesciando l'ordine dei comandi gli usi di $\mathit{ch}_2$
-verrebbero prima dell'appuntamento che lo consegna. Non è un timore teorico: dei
-programmi di prova due lo fanno, e con il corpo inverso emesso comunque si
-fermano entrambi in stallo, ogni ramo in attesa su un canale di cui nessun altro
-è ancora titolare. Il compilatore riconosce quindi il caso, e lo riconosce sul
-programma intero perché un ramo può limitarsi a chiamare la procedura che
-trasmette; per quei due programmi su ottantanove non emette corpo inverso, e
-l'inversione resta affidata al motore dinamico, che accoppia gli appuntamenti
-mentre esegue invece di prevederli. Per tutti gli altri, $\mathtt{par}$ inclusi,
-l'inverso è compilato.
-
-Sta dentro la stessa procedura, e non in una nuova, perché così ne condivide la
-tabella dei nomi: l'ordine in cui gli indici vengono assegnati, che il dump
-finale rende osservabile, resta quello dell'esecuzione diretta.
+Per il $\mathtt{par}$ il corpo inverso è $\mathtt{par}\ \Inv{c_1}\ \mathtt{and}\
+\dots\ \mathtt{and}\ \Inv{c_n}\ \mathtt{rap}$, come nel \cref{chap:reversibilita}.
+Vale se i titolari di ogni canale sono fissati dal testo. Se un canale viaggia
+dentro un messaggio, i suoi usi verrebbero anticipati, nell'inverso, rispetto
+all'appuntamento che lo consegna, e i rami si fermerebbero in attesa: in quel
+caso il compilatore non emette il corpo inverso, e l'inversione avviene a tempo
+di esecuzione, accoppiando gli appuntamenti man mano che si presentano.
 
 \section{Strutture e ciclo di esecuzione}
 \label{sec:interprete}
@@ -2253,8 +2230,7 @@ scritto accanto a sé e non cercano affatto.
 Nessuna struttura ha una dimensione fissata in anticipo: non la profondità di
 ricorsione, non il numero di rami di un \texttt{par}, non i parametri di una
 procedura, non i nomi che un frame può contenere né la lunghezza di ciascuno.
-Tutte crescono su richiesta, e l'unico limite che resta, sulla lunghezza di una
-riga di bytecode, è verificato e produce un errore esplicito invece di troncare.
+Tutte crescono su richiesta.
 Un frame è così duecento byte: il vettore delle variabili e i riferimenti alla
 tabella dei nomi della sua procedura. Di frame ne esiste uno per procedura, non
 uno per attivazione: la ricorsione non ne duplica la struttura. Un nome aperto da

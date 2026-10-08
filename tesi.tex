@@ -24,8 +24,8 @@
 Kairos è un linguaggio di programmazione \emph{reversibile} e
 \emph{concorrente}, ispirato a Janus~\cite{YokoyamaGluck2007} ed esteso per
 esprimere problemi concorrenti. Ogni programma Kairos può essere eseguito sia in
-avanti sia all'indietro: l'inverso di qualunque computazione è sempre ben
-definito e calcolabile. Il linguaggio offre parallelismo esplicito,
+avanti sia all'indietro, e il suo inverso si calcola dal testo del
+programma. Il linguaggio offre parallelismo esplicito,
 comunicazione sincrona su canali tipizzati e transazioni con compensazione.
 
 Questa tesi ne dà la semantica operazionale strutturale in stile small-step,
@@ -34,6 +34,10 @@ Stefani~\cite{LamiLaneseStefani2024}, e l'operatore di inversione che realizza
 l'esecuzione all'indietro. Sui canali si adotta una disciplina di sessione
 binaria sorvegliata durante l'esecuzione, che ammette la delega, cioè il
 passaggio di un canale da un titolare a un altro.
+Il linguaggio è realizzato da un interprete, con un debugger che esegue il
+programma un passo alla volta in avanti e all'indietro, e un caso di studio, la
+trasformata di Burrows--Wheeler reversibile con i blocchi trasformati in
+parallelo, ne misura il costo e il guadagno della concorrenza.
 
 \topmargin=-1cm
 \tableofcontents

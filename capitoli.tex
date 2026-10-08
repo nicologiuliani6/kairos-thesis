@@ -1872,34 +1872,35 @@ non è praticabile.
 \section{I blocchi in parallelo}
 
 Ogni blocco è un ramo, con le proprie strutture; l'unico punto di contatto è il
-canale su cui il ramo consegna il risultato. Il payload di un $\mathtt{ssend}$
-può essere uno stack intero, quindi la colonna trasformata viaggia in un colpo
-solo insieme al suo indice.
+canale su cui il ramo consegna il risultato. Il blocco, le rotazioni e la colonna
+trasformata sono array, e restano nel ramo che li possiede. Il payload di un
+$\mathtt{ssend}$ può essere uno stack intero ma non un vettore, quindi alla fine
+la colonna viene copiata in uno stack e questo viaggia in un colpo solo insieme
+all'indice.
 
 \begin{lstlisting}
-procedure lavoratore(stack blocco, stack aux, stack offs, stack scarto,
-                     stack out, channel c, int n)
+procedure lavoratore(int blocco[], int offs[], int out[], stack scarto,
+                     stack colonna, channel c, int n)
     local int idx = 0
-        call bwt(blocco, aux, offs, scarto, out, n, idx)
-        ssend(<idx, out>, c)
+        call ordina(offs, blocco, scarto, n)
+        call estrai(offs, blocco, out, n, idx)
+        // copia della colonna nello stack che viaggia sul canale
+        ssend(<idx, colonna>, c)
     delocal int idx = 0
 
 par
-    call lavoratore(b0, aux0, offs0, sc0, out0, c0, n)
+    call lavoratore(b0, offs0, out0, sc0, st0, c0, n)
 and
-    call lavoratore(b1, aux1, offs1, sc1, out1, c1, n)
+    call lavoratore(b1, offs1, out1, sc1, st1, c1, n)
 and
     call raccoglitore(c0, c1, col0, col1, indici)
 rap
 \end{lstlisting}
 
 \noindent
-Qui il blocco viaggia come \texttt{stack} e non come array, e la ragione è il
-canale: il payload di un $\mathtt{ssend}$ può essere un intero, uno stack o un
-canale, non un vettore. Trasferire un array richiederebbe di deciderne la sorte
-nel mittente — un rendez-vous consuma ciò che manda, e un array ha lunghezza
-fissa — ed è una scelta che non abbiamo compiuto. La versione concorrente
-resta perciò quella su stack.
+Gli array di rami diversi sono disgiunti, quindi il controllo statico sui rami
+del $\mathtt{par}$ li accetta: ciascuno è scritto da un solo ramo. Il canale, che
+non trasporta vettori, è l'unico punto in cui i dati cambiano proprietario.
 
 \section{Risultati}
 
@@ -1913,7 +1914,7 @@ blocco & \texttt{\{2, 1, 3, 1, 3, 1\}}\\
 rotazioni ordinate & \texttt{\{5, 3, 1, 0, 4, 2\}}\\
 ultima colonna & \texttt{\{3, 3, 2, 1, 1, 1\}} \quad cioè \texttt{nnbaaa}\\
 indice & \texttt{3}\\
-ricostruzione da (colonna, indice) & \texttt{\{1, 3, 1, 3, 1, 2\}}\\
+ricostruzione da (colonna, indice) & \texttt{\{2, 1, 3, 1, 3, 1\}} \quad cioè \texttt{banana}\\
 \hline
 \end{tabular}
 \end{center}
@@ -1922,9 +1923,7 @@ ricostruzione da (colonna, indice) & \texttt{\{1, 3, 1, 3, 1, 2\}}\\
 Coincide con il loro esempio. La ricostruzione parte da \emph{sola} colonna e
 indice, quindi è decompressione vera e non un semplice \texttt{uncall}: usa la
 trasformata inversa classica, che costruisce il vettore delle righe precedenti e
-lo percorre a partire dall'indice. Il cammino attraversa la matrice a partire
-dalla riga $\mathit{idx}$, quindi restituisce il blocco a meno di una rotazione:
-$\{1,3,1,3,1,2\}$ è \texttt{banana} letta da capo dopo la \texttt{b}. Verificata anche su blocchi di dodici simboli
+lo percorre a partire dall'indice. Il cammino attraversa la matrice a partire dalla riga $\mathit{idx}$ e restituisce il blocco di partenza, \texttt{banana}. Verificata anche su blocchi di dodici simboli
 e tre blocchi concorrenti.
 
 \paragraph{Costo.} Il tempo di esecuzione di un blocco, al variare della sua
@@ -1935,14 +1934,14 @@ lunghezza $n$:
 \centering
 \begin{tabular}{ll}
 \hline
-$n$ & tempo (log)\\
+$n$ & tempo (s)\\
 \hline
-12 & 0{,}500\\
-16 & 1{,}725\\
-20 & 2{,}692\\
-24 & 3{,}491\\
-28 & 4{,}168\\
-32 & 4{,}792\\
+12 & 0{,}38\\
+16 & 0{,}76\\
+20 & 1{,}42\\
+24 & 2{,}79\\
+28 & 3{,}97\\
+32 & 5{,}63\\
 \hline
 \end{tabular}
 \end{minipage}%
@@ -1952,28 +1951,31 @@ $n$ & tempo (log)\\
 % Assi logaritmici in base 2: su di essi una legge di potenza appare come una retta
 \begin{tikzpicture}[x=3.3cm,y=1.05cm]
   \draw[->] (-0.08,0) -- (1.72,0) node[right,font=\footnotesize] {$n$ (log)};
-  \draw[->] (-0.08,-0.15) -- (-0.08,5.35) node[above right,font=\footnotesize] {tempo (log)};
+  \draw[->] (-0.08,-0.15) -- (-0.08,5.1) node[above right,font=\footnotesize] {tempo (log)};
   % tacche su n
   \foreach \X/\L in {0.085/12, 0.5/16, 0.822/20, 1.085/24, 1.307/28, 1.5/32}
     \draw (\X,0) -- (\X,-0.09) node[below,font=\footnotesize] {\L};
-  % retta dei minimi quadrati, pendenza 3,03
-  \draw[thick,gray!70] (0,0.219) -- (1.6,5.067);
+  % retta dei minimi quadrati, pendenza 2,82; ordinata = log2 del tempo in unità di 0,25 s
+  \draw[thick,gray!70] (0,0.284) -- (1.6,4.8);
   % punti misurati
-  \foreach \X/\Y in {0.085/0.500, 0.5/1.725, 0.822/2.692, 1.085/3.491, 1.307/4.168, 1.5/4.792}
+  \foreach \X/\Y in {0.085/0.600, 0.5/1.598, 0.822/2.501, 1.085/3.481, 1.307/3.989, 1.5/4.492}
     \fill (\X,\Y) circle (1.7pt);
-  \node[font=\footnotesize,anchor=west] at (0.62,1.30) {pendenza $3{,}03$};
+  \node[font=\footnotesize,anchor=west] at (0.62,1.30) {pendenza $2{,}82$};
 \end{tikzpicture}
 \end{minipage}
 \end{center}
 
 \noindent
-Gli assi sono logaritmici, quindi l'allineamento dei punti dice che il costo è
-una legge di potenza e la pendenza ne dà l'esponente. La retta di regressione di
-$\log t$ su $\log n$ ha pendenza $3{,}03$: il costo è $n^3$, lo stesso del lavoro
-di riferimento, e l'accesso per indice non aggiunge nulla all'ordine di
-grandezza. È quello che ci si aspetta dalla forma
-del programma: l'ordinamento a bolle compie $O(n^2)$ confronti fra rotazioni, e
-ciascun confronto ne scandisce $O(n)$ caratteri.
+Gli assi sono logaritmici in base 2 e il tempo è in secondi (l'ordinata è
+$\log_2$ del tempo in unità di $0{,}25$ s), quindi l'allineamento dei punti dice
+che il costo è una legge di potenza e la pendenza ne dà l'esponente. La retta di
+regressione di $\log t$ su $\log n$ ha pendenza $2{,}82$: il costo è $n^3$, lo
+stesso del lavoro di riferimento, e l'accesso per indice non aggiunge nulla
+all'ordine di grandezza. Il valore appena sotto $3$ viene dal tempo fisso di
+avvio dell'interprete, che pesa sui blocchi piccoli. È quello che ci si aspetta
+dalla forma del programma: l'ordinamento a bolle compie $O(n^2)$ confronti fra
+rotazioni, e ciascun confronto ne scandisce $O(n)$ caratteri, ciascuno letto in
+tempo costante.
 
 \paragraph{Concorrenza.} Lo stesso calcolo in due varianti che differiscono in
 un solo punto, la procedura che orchestra i blocchi. Nella prima ogni blocco sta
@@ -2007,7 +2009,7 @@ rap
 \end{minipage}
 \end{center}
 
-Con $n=8$, vediamo il guadagno della versione parallelizzata rispetto quella sequenziale:
+Con blocchi di $n=20$ simboli, il guadagno della versione parallelizzata rispetto a quella sequenziale è:
 
 \begin{center}
 \begin{minipage}[c]{0.30\textwidth}
@@ -2016,10 +2018,10 @@ Con $n=8$, vediamo il guadagno della versione parallelizzata rispetto quella seq
 \hline
 blocchi & guadagno \texttt{par}\\
 \hline
-2 & 1{,}16$\times$\\
-4 & 1{,}34$\times$\\
-6 & 1{,}32$\times$\\
-8 & 1{,}46$\times$\\
+2 & 1{,}80$\times$\\
+4 & 3{,}19$\times$\\
+6 & 4{,}29$\times$\\
+12 & 4{,}62$\times$\\
 \hline
 \end{tabular}
 \end{minipage}
@@ -2032,19 +2034,19 @@ blocchi & guadagno \texttt{par}\\
     height=0.60\textwidth,
     xlabel={Numero di blocchi},
     ylabel={Guadagno \texttt{par}},
-    xtick={2,4,6,8},
+    xtick={2,4,6,12},
     ymin=1,
-    ymax=1.6,
+    ymax=5,
     grid=major
 ]
 \addplot[
     mark=*,
     thick
 ] coordinates {
-    (2,1.16)
-    (4,1.34)
-    (6,1.32)
-    (8,1.46)
+    (2,1.80)
+    (4,3.19)
+    (6,4.29)
+    (12,4.62)
 };
 \end{axis}
 \end{tikzpicture}
@@ -2053,7 +2055,14 @@ blocchi & guadagno \texttt{par}\\
 
 \noindent
 
-Notiamo come, aumentando il numero di blocchi, il guadagno della versione \texttt{par} tenda complessivamente ad aumentare, mostrando un maggiore sfruttamento del parallelismo disponibile.
+Il guadagno cresce quasi
+linearmente fino a quattro blocchi, dove arriva a $3{,}2\times$, e poi sale più
+lentamente fino a $4{,}6\times$ con dodici. Vuol dire che il parallelismo fra
+blocchi è reale: aggiungere blocchi non ne rallenta l'esecuzione, e il tempo
+totale cresce molto meno della somma dei tempi. L'andamento non è lineare perché l'hardware non scala all'infinito, e perché
+resta la parte che non si parallelizza, cioè l'avvio dell'interprete e il
+raccoglitore, che riceve dai canali uno per volta.
+
 \section{Limiti}
 
 Tre, dichiarati. L'alfabeto delle prove è ridotto a tre simboli: nulla nel
@@ -2345,6 +2354,10 @@ lock sullo store; l'unica primitiva di sincronizzazione è il canale, realizzato
 con un mutex e due code di attesa, una per i mittenti e una per i riceventi. Chi
 arriva per primo si accoda e si blocca, chi arriva per secondo trova il partner,
 lo sveglia, e lo scambio avviene: è il rendez-vous di \textsc{Par-Comm}.
+I thread di un \texttt{par} attendono il completamento di un rendez-vous sulla
+stessa variabile di condizione, e un singolo segnale potrebbe svegliare un thread
+diverso da quello atteso lasciandolo ad aspettare: per questo ogni notifica è un
+\emph{broadcast}, e ciascun thread ricontrolla da sé il proprio predicato.
 
 \medskip
 \noindent
@@ -2537,8 +2550,8 @@ possibile e ciò che servirebbe a un compressore vero, e i due algoritmi dello
 standard zip lo mostrano in modo opposto. La compressione a dizionario regge:
 nella versione reversibile di riferimento gira in $\Theta(n)$, come la migliore
 irreversibile, quindi la reversibilità non costa nulla in complessità. La
-trasformata no: costa $O(n^3)$, ed è l'esponente che misuriamo. Resta però
-$O(n^3)$, cioè l'ordinamento ingenuo delle rotazioni, che è il punto su cui il
+trasformata no: costa $O(n^3)$, ed è l'esponente che misuriamo, circa $2{,}8$.
+Resta il problema dell'ordinamento ingenuo delle rotazioni, che è il punto su cui il
 lavoro di riferimento stesso dichiara che i miglioramenti sono possibili e
 necessari: un ordinamento migliore è la direzione che indicheremmo per prima.
 Finché manca, i blocchi restano corti, e con blocchi corti la trasformata non ha
@@ -2561,8 +2574,8 @@ può dimostrare sull'inversione, perché un messaggio in transito è stato che i
 rendez-vous non produce.
 
 \paragraph{L'implementazione.} Sul calcolo concorrente la misura dice che il
-parallelismo si realizza, con l'ottantanove per cento del massimo che la macchina
-di prova rende disponibile, e indica nella frazione sequenziale del programma, cioè
+parallelismo si realizza, con un guadagno di $4{,}6\times$ a dodici blocchi su
+sei nuclei, e indica nella frazione sequenziale del programma, cioè
 nel raccoglitore che riceve dai canali uno per volta, il candidato per la parte
 restante. Non dice però fin dove il guadagno cresca: servono una macchina con più
 nuclei e un raccoglitore ad albero, e sono due esperimenti, non due congetture.

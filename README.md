@@ -1,5 +1,8 @@
 # Kairos: a reversible and concurrent language
 
+📄 **[Read the thesis (PDF)](http://nicologiuliani.site/kairos-thesis/tesi.pdf)**,
+rebuilt automatically from `main` on every push.
+
 Bachelor's thesis in Computer Science, University of Bologna
 (Dipartimento di Informatica – Scienza e Ingegneria), academic year 2026/2027.
 

@@ -13,20 +13,26 @@ permissions:
   pages: write
   id-token: write
 
+# Due push ravvicinati facevano partire due deploy insieme, e il primo falliva.
+# Una nuova esecuzione sullo stesso ramo annulla quella ancora in corso.
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
     name: Build
     steps:
       - name: Checkout code
-        uses: actions/checkout@main
+        uses: actions/checkout@v4
       - name: Compile thesis
         uses: xu-cheng/latex-action@v3
         with:
           root_file: tesi.tex
           latexmk_use_lualatex: false
       - name: Generate build artifact
-        uses: actions/upload-artifact@main
+        uses: actions/upload-artifact@v4
         with:
           name: build
           path: tesi.pdf
@@ -40,18 +46,18 @@ jobs:
     if: github.ref == 'refs/heads/main'
     steps:
       - name: Checkout
-        uses: actions/checkout@main
+        uses: actions/checkout@v4
       - name: Download static site artifact
-        uses: actions/download-artifact@main
+        uses: actions/download-artifact@v4
         with:
           name: build
           path: site
       - name: Setup Pages
-        uses: actions/configure-pages@main
+        uses: actions/configure-pages@v5
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@main
+        uses: actions/upload-pages-artifact@v3
         with:
           path: site
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@main
+        uses: actions/deploy-pages@v4

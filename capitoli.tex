@@ -59,7 +59,7 @@ Al nucleo di Janus (assegnamenti invertibili, condizionali a doppia guardia,
 cicli \texttt{from\,\dots\,until}, procedure invocabili con \texttt{call} e
 \texttt{uncall}, interi e array) Kairos aggiunge il parallelismo esplicito
 \texttt{par\,\dots\,and\,\dots\,rap}, la comunicazione sincrona su canali
-tipizzati \texttt{ssend}/\texttt{srecv}, uno stack come struttura dati primitiva
+\texttt{ssend}/\texttt{srecv} con protocolli ricostruiti dal programma, uno stack come struttura dati primitiva
 e le transazioni \texttt{try\,\dots\,rollback\,\dots\,yrt}.
 La scelta di progetto che tiene insieme il tutto è la \emph{disgiunzione}: rami
 paralleli operano su porzioni disgiunte dello store e comunicano solo per
@@ -227,7 +227,8 @@ riprende per un confronto puntuale.
 
 \subsubsection{Canali e tipi di sessione}
 
-La comunicazione di Kairos avviene su canali \emph{sincroni} e \emph{tipizzati},
+La comunicazione di Kairos avviene su canali \emph{sincroni}, con protocolli
+ricostruiti dal programma,
 con il vincolo che ogni canale abbia in ogni istante al più due titolari, una
 \emph{sessione binaria}. È una restrizione che viene dalla teoria dei
 \textbf{tipi di sessione}~\cite{HondaVasconcelosKubo1998,%
@@ -267,8 +268,8 @@ preoccuparsi delle corse e un sistema di tipi sovrapposto le esclude; i tipi di
 sessione, binari o multiparty, sono precisamente una famiglia di sistemi di tipi
 di questo genere. In \S\ref{sec:chan} diamo la disciplina binaria per i canali di
 Kairos, delega compresa, e i tipi di sessione che ne descrivono il protocollo:
-i tipi non si dichiarano ma si ricostruiscono dal programma, e i due estremi di
-ogni canale devono risultare duali. Restano fuori la scelta etichettata e i canali
+i tipi non si dichiarano ma si ricostruiscono dal programma, e il compilatore
+rifiuta due estremi di un canale con protocolli in conflitto dimostrabile. Restano fuori la scelta etichettata e i canali
 con più di due partecipanti.
 
 % ======================================================================
@@ -357,8 +358,11 @@ $\mathtt{delocal}\ i = n$ che chiude un contatore arrivato al limite $n$.
 \noindent
 Un \emph{programma} è una lista di procedure
 $\mathtt{procedure}\ f(\bar v)\ \{\, c \,\}$; $\bar v$ è la lista (eventualmente
-vuota) dei parametri. La sequenza è scritta con il punto e virgola esplicito,
-$c_1\,;\,c_2$, come nelle regole di \S\ref{sec:seq}. Il condizionale ha
+vuota) dei parametri. Questa è la sintassi astratta: la sequenza si scrive qui
+con il punto e virgola, $c_1\,;\,c_2$, come nelle regole di \S\ref{sec:seq},
+mentre nel testo dei programmi i comandi si scrivono uno dopo l'altro, senza
+separatori, e il corpo di una procedura arriva fino alla procedura successiva,
+senza parentesi graffe (per convenzione un comando per riga, indentato). Il condizionale ha
 \textbf{due} guardie ($b$ d'ingresso, $b'$ d'uscita) e il ciclo pure ($b_1$
 d'ingresso, $b_2$ d'uscita): è ciò che rende il linguaggio reversibile
 (\S\ref{sec:rev}). Le parentesi quadre segnano le clausole \emph{facoltative},
@@ -380,8 +384,21 @@ che il compilatore verifica prima dell'esecuzione:
     ogni $\mathtt{delocal}$ chiude il $\mathtt{local}$ aperto più di recente
     nella stessa sequenza di comandi, nessun $\mathtt{local}$ resta aperto alla
     fine della sequenza, e un $\mathtt{local}$ non ridichiara un parametro o un
-    locale ancora aperto (\S\ref{sec:scope});
-  \item le procedure hanno nomi distinti, e $\mathtt{main}$ non ha parametri;
+    locale ancora aperto (\S\ref{sec:scope}); un $\mathtt{delocal}$ riporta il
+    valore atteso e ha lo stesso tipo, e per un array la stessa lunghezza, del
+    $\mathtt{local}$ che chiude;
+  \item le dichiarazioni senza $\mathtt{local}$ ($\mathtt{int}\ x$,
+    $\mathtt{stack}\ s$, $\mathtt{channel}\ c$) compaiono solo in
+    $\mathtt{main}$: sono il suo store iniziale, a zero o vuoto, ed è ciò che
+    l'interprete mostra a fine esecuzione; nelle altre procedure ogni variabile
+    è un parametro o un locale;
+  \item le procedure hanno nomi distinti, diversi da quelli delle operazioni
+    predefinite ($\mathtt{show}$, $\mathtt{push}$, $\mathtt{pop}$,
+    $\mathtt{ssend}$, $\mathtt{srecv}$), e $\mathtt{main}$ non ha parametri;
+  \item gli operandi hanno il tipo giusto: un'espressione legge interi e celle
+    di array, $\mathtt{push}$ e $\mathtt{pop}$ collegano una variabile intera e
+    uno stack, $\mathtt{ssend}$ e $\mathtt{srecv}$ usano un canale e un
+    messaggio di variabili distinte (interi, stack o canali);
   \item ogni variabile usata da un comando è nello store dell'attivazione: è un
     parametro, una variabile dichiarata o un locale ancora aperto;
   \item ogni $\mathtt{call}$/$\mathtt{uncall}$ nomina una procedura del
@@ -1426,7 +1443,9 @@ partner di un'offerta non è più determinato, e l'interprete si ferma subito
 invece di aspettare che uno dei due termini.
 Il secondo è lo \textbf{stallo}: nessun ramo del programma può più avanzare,
 perché ognuno ha finito, è fermo in attesa su canale o aspetta i rami di un
-$\mathtt{par}$ annidato. Il singolo blocco resta blocco, come detto sopra, perché un
+$\mathtt{par}$ annidato. Il caso più semplice è un $\mathtt{ssend}$ o un
+$\mathtt{srecv}$ fuori da ogni $\mathtt{par}$: c'è un solo ramo, e il partner
+non può esistere. Il singolo blocco resta blocco, come detto sopra, perché un
 partner potrebbe ancora offrirsi; ma quando non resta alcun ramo che possa
 offrirsi, l'attesa non è più provvisoria e diventa $\err$. È la differenza fra
 non avere \emph{ancora} un partner e non poterne avere.
@@ -1836,13 +1855,16 @@ procedure car(int blocco[], int n, int off, int k, int c)
 
 \noindent
 Il carattere $k$-esimo della rotazione che parte da $\mathit{off}$ sta in
-posizione $(\mathit{off}+k) \bmod n$. Il modulo non si scrive con l'operatore
-ma con un $\mathtt{if}$, e la ragione è la reversibilità: $j$ è una variabile
-locale che va riportata a zero, quindi la correzione $j \mathrel{-}= n$ deve
-poter essere disfatta, e per disfarla serve sapere se è avvenuta. La guardia
-d'uscita $j < \mathit{off}$ lo dice — dopo la correzione $j$ è sceso sotto
-$\mathit{off}$, senza correzione no — e il secondo $\mathtt{if}$, che è
-l'inverso del primo, la usa per rimettere $j$ a posto.
+posizione $(\mathit{off}+k) \bmod n$. Con l'operatore \texttt{\%} basterebbe
+$c \mathbin{+\!\!=} \mathit{blocco}[(\mathit{off}+k) \bmod n]$, che è
+reversibile perché l'indice dipende solo da variabili che il comando non
+modifica. Il listato tiene invece la correzione esplicita, perché mostra come si
+rende reversibile un passo che di per sé perde informazione: $j$ è una
+variabile locale che va riportata a zero, quindi la correzione
+$j \mathrel{-}= n$ deve poter essere disfatta, e per disfarla serve sapere se è
+avvenuta. La guardia d'uscita $j < \mathit{off}$ lo dice — dopo la correzione
+$j$ è sceso sotto $\mathit{off}$, senza correzione no — e il secondo
+$\mathtt{if}$, che è l'inverso del primo, la usa per rimettere $j$ a posto.
 
 \section{Il confronto lessicografico}
 
@@ -1853,8 +1875,10 @@ guardia d'uscita di un $\mathtt{if}$ non distinguerebbe ``sono entrato e non ho
 ancora trovato'' da ``non sono entrato''.
 
 La via che funziona usa un testimone. Finché le due rotazioni coincidono, il
-contatore \texttt{pref} vale esattamente $k$; dopo il corpo vale $k$ oppure
-$k+1$, in entrambi i casi $\geq k$, mentre chi non è entrato è rimasto sotto.
+contatore \texttt{pref} vale esattamente $k$. Il primo $\mathtt{if}$ non lo
+tocca, il secondo lo incrementa quando i due caratteri sono uguali: dopo il
+corpo vale $k$ oppure $k+1$, in entrambi i casi $\geq k$, mentre chi non è
+entrato è rimasto sotto $k$.
 
 \begin{lstlisting}
 if pref == k then            // siamo ancora nel prefisso comune
@@ -1862,15 +1886,19 @@ if pref == k then            // siamo ancora nel prefisso comune
         gt += 1
     fi gt == 1
 fi pref >= k                 // guardia d'uscita valida
+if pref == k then
+    if c1 == c2 then
+        pref += 1
+    fi pref > k
+fi pref >= k
 \end{lstlisting}
 
 \noindent
 Una formulazione alternativa, accumulare il valore posizionale in base $B$ della
 differenza fra le rotazioni, ordina anch'essa correttamente ed è pura
-accumulazione, ma richiede di moltiplicare per $B$ a ogni passo: in Kairos
-azzerare il fattore vorrebbe una divisione, cioè sottrazioni ripetute il cui
-costo dipende dal valore e non dalla lunghezza, e su numeri dell'ordine di $B^n$
-non è praticabile.
+accumulazione, ma richiede di moltiplicare per $B$ a ogni passo: il valore
+cresce come $B^n$, e con interi a 64 bit trabocca già per blocchi di poche
+decine di caratteri.
 
 \section{I blocchi in parallelo}
 
@@ -2320,6 +2348,11 @@ che contiene il \texttt{par} ma ogni ramo ha la propria pila dei
 $\mathtt{local}$ aperti, il controllo delle scritture concorrenti sta nella singola variabile e
 non in un lock globale, e la tabella dei nomi si consulta senza esclusione,
 perché le voci si aggiungono soltanto e diventano visibili quando sono complete.
+Restano pochi lock globali, tenuti per il tempo di un'operazione breve e senza
+che il risultato dipenda dall'ordine in cui i thread li ottengono: quello che
+aggiunge un nome o un frame clonato alle tabelle, quello dello stato di
+sessione dei canali, quello dei canali da ripristinare all'indietro e quello
+dell'output.
 
 Il bytecode è uno solo, letto da tutti i rami. Il programma contiene solo
 istruzioni e nessuno stato --- tutto ciò che cambia durante l'esecuzione sta
@@ -2474,7 +2507,7 @@ reversibile e concorrente, e ne abbiamo dato la semantica operazionale
 strutturale in stile small-step, definita come estensione di quella di Janus di
 Lami, Lanese e Stefani. Ciò che Kairos aggiunge alla base sono i costrutti che
 servono a un linguaggio concorrente e a un linguaggio con dati: composizione
-parallela, comunicazione sincrona su canali tipizzati, transazioni con
+parallela, comunicazione sincrona su canali con protocolli inferiti, transazioni con
 compensazione, stack, parametri di procedura e ambito locale. Abbiamo definito
 l'operatore di inversione, sintattico e calcolabile in tempo lineare, e mostrato
 che l'esecuzione all'indietro di un blocco parallelo è ben definita: la

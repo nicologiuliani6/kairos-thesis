@@ -394,11 +394,18 @@ che il compilatore verifica prima dell'esecuzione:
     è un parametro o un locale;
   \item le procedure hanno nomi distinti, diversi da quelli delle operazioni
     predefinite ($\mathtt{show}$, $\mathtt{push}$, $\mathtt{pop}$,
-    $\mathtt{ssend}$, $\mathtt{srecv}$), e $\mathtt{main}$ non ha parametri;
-  \item gli operandi hanno il tipo giusto: un'espressione legge interi e celle
-    di array, $\mathtt{push}$ e $\mathtt{pop}$ collegano una variabile intera e
-    uno stack, $\mathtt{ssend}$ e $\mathtt{srecv}$ usano un canale e un
-    messaggio di variabili distinte (interi, stack o canali);
+    $\mathtt{ssend}$, $\mathtt{srecv}$) e da quelli che il compilatore riserva
+    alle procedure che genera (che finiscono in \texttt{\_\_inv} o cominciano
+    con \texttt{\_\_try\_}), e $\mathtt{main}$ non ha parametri;
+  \item gli operandi hanno il tipo giusto, secondo la dichiarazione in scope
+    (uno stesso nome può essere un intero in un blocco e uno stack in un
+    altro): un'espressione legge interi e celle di array; un argomento di
+    $\mathtt{call}$/$\mathtt{uncall}$ ha il tipo del parametro corrispondente;
+    $\mathtt{push}$ e $\mathtt{pop}$ collegano una variabile intera e uno
+    stack; $\mathtt{ssend}$ e $\mathtt{srecv}$ usano un canale e un messaggio
+    di variabili distinte (interi, stack o canali); il valore di un
+    $\mathtt{local}$ o $\mathtt{delocal}$ è un intero per interi e array,
+    $\mathtt{nil}$ per uno stack, $\mathtt{empty}$ per un canale;
   \item ogni variabile usata da un comando è nello store dell'attivazione: è un
     parametro, una variabile dichiarata o un locale ancora aperto;
   \item ogni $\mathtt{call}$/$\mathtt{uncall}$ nomina una procedura del
@@ -2352,7 +2359,8 @@ Restano pochi lock globali, tenuti per il tempo di un'operazione breve e senza
 che il risultato dipenda dall'ordine in cui i thread li ottengono: quello che
 aggiunge un nome o un frame clonato alle tabelle, quello dello stato di
 sessione dei canali, quello dei canali da ripristinare all'indietro e quello
-dell'output.
+dell'output, che tiene intera la riga di ogni $\mathtt{show}$ anche quando due
+rami stampano nello stesso momento.
 
 Il bytecode è uno solo, letto da tutti i rami. Il programma contiene solo
 istruzioni e nessuno stato --- tutto ciò che cambia durante l'esecuzione sta

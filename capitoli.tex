@@ -403,7 +403,8 @@ che il compilatore verifica prima dell'esecuzione:
     $\mathtt{call}$/$\mathtt{uncall}$ ha il tipo del parametro corrispondente;
     $\mathtt{push}$ e $\mathtt{pop}$ collegano una variabile intera e uno
     stack; $\mathtt{ssend}$ e $\mathtt{srecv}$ usano un canale e un messaggio
-    di variabili distinte (interi, stack o canali); il valore di un
+    non vuoto di variabili distinte fra loro e dal canale (interi, stack o
+    canali); il valore di un
     $\mathtt{local}$ o $\mathtt{delocal}$ è un intero per interi e array,
     $\mathtt{nil}$ per uno stack, $\mathtt{empty}$ per un canale;
   \item ogni variabile usata da un comando è nello store dell'attivazione: è un

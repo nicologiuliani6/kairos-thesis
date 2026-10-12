@@ -1043,7 +1043,10 @@ un match. La sincronizzazione stessa \emph{è} la premessa condivisa.
 \paragraph{Perché non serve una coda.} Un canale ha al più due titolari
 (sotto), quindi in ogni istante c'è al più un $\mathtt{ssend}$ e un
 $\mathtt{srecv}$ in attesa, che \textsc{Par-Comm} consuma insieme: non c'è mai
-un messaggio in transito da conservare. Soprattutto, una coda romperebbe
+un messaggio in transito da conservare. Nell'interprete il mittente deposita il
+messaggio nel canale e aspetta il ricevente, che lo prende per intero: un
+$\mathtt{srecv}$ che riceve meno valori di quanti ne sono stati spediti è un
+errore, e nessun valore resta nel canale per lo scambio successivo. Soprattutto, una coda romperebbe
 l'invertibilità: $\mathtt{ssend}$ e $\mathtt{srecv}$ agirebbero su estremità
 opposte, e l'inverso di un accodamento in fondo non sarebbe la ricezione dalla
 testa. Con il rendez-vous la dualità $\Inv{\mathtt{ssend}} = \mathtt{srecv}$
@@ -2307,7 +2310,8 @@ oppure nessuna.
 Nessuna struttura ha una dimensione fissata in anticipo: non la profondità di
 ricorsione, non il numero di rami di un \texttt{par}, non i parametri di una
 procedura, non i nomi che un frame può contenere né la loro lunghezza. Tutte
-crescono su richiesta.
+crescono su richiesta, e il solo limite è la memoria del sistema: un ramo il
+cui thread non si può creare è un errore segnalato, non un'attesa infinita.
 
 Ogni attivazione ricorsiva lavora su un proprio frame, clonato da quello della
 procedura con il suo stesso indice dei nomi; lo stesso vale per la ricorsione
@@ -2416,6 +2420,9 @@ chiamante richiede di ricostruire il record di attivazione, che non è parte
 dello store ma della macchina che lo esegue. Dentro un ramo di un
 $\mathtt{par}$ in corso non si torna indietro: lo scambio su un canale ha un
 inverso che richiede il partner, e il $\mathtt{par}$ si disfa solo per intero.
+Per la stessa ragione il passo indietro non è disponibile quando ci si è
+fermati dentro un $\mathtt{uncall}$ in corso: lì si sta già eseguendo
+un'inversione, e la si completa andando avanti.
 
 % ======================================================================
 \chapter{Lavori correlati}

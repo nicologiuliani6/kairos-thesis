@@ -2279,10 +2279,16 @@ all'albero sintattico ed emette una seconda procedura, \code{p\_\_inv}, accanto
 a \code{p}: $\mathtt{uncall}\ p$ diventa una normale chiamata in avanti di
 \code{p\_\_inv}, con lo stesso ciclo e gli stessi parametri. Per le altre
 procedure l'interprete inverte il corpo a tempo di esecuzione: ne percorre il
-bytecode dall'ultima riga alla prima ed esegue per ciascuna istruzione la sua
-inversa (\code{PUSHEQ} diventa \code{MINEQ}, \code{PUSH} diventa \code{POP},
-\code{SSEND} diventa \code{SRECV}), ricostruendo cicli e condizionali dalle
-etichette. Il ramo di un condizionale si legge dall'asserzione d'uscita e il
+bytecode dall'ultima riga alla prima, usando l'indice delle righe, ed esegue
+per ciascuna istruzione la sua inversa (\code{PUSHEQ} diventa \code{MINEQ},
+\code{PUSH} diventa \code{POP}, \code{SSEND} diventa \code{SRECV}),
+ricostruendo cicli e condizionali dalle etichette. È il comportamento
+predefinito. Con l'opzione \texttt{--compiled-uncall} il frontend emette
+\code{p\_\_inv} anche per ogni procedura che non contiene \texttt{par} né
+canali, neppure tramite chiamate indirette, e \texttt{uncall}~$p$ diventa una
+chiamata in avanti, senza ricostruire l'inverso a ogni esecuzione. Le
+procedure con \texttt{par} o canali restano sul percorso a tempo di
+esecuzione. Il ramo di un condizionale si legge dall'asserzione d'uscita e il
 numero di iterazioni di un ciclo dalle sue guardie, quindi anche qui non serve
 alcuna storia dei dati. Quando, invertendo un corpo, l'interprete incontra la
 chiamata a una procedura ricorsiva, esegue in avanti il suo corpo inverso
@@ -2322,24 +2328,35 @@ tocca l'omonimo esterno: è lo store per attivazione della semantica
 (\S\ref{sec:scope}). Un secondo $\mathtt{local}$ sullo stesso nome nella
 \emph{stessa} attivazione resta l'errore che la semantica prescrive.
 
-\paragraph{Ciclo principale.} L'interprete esegue direttamente il testo del
-bytecode: legge una riga, ne copia il contenuto, ne estrae l'opcode e lo esegue.
+\paragraph{Ciclo principale.} Il bytecode resta testo, ma all'avvio
+l'interprete lo scorre una volta e costruisce un indice delle righe: per
+ciascuna, dove comincia, dove finisce, dove cominciano gli operandi e il suo
+codice d'istruzione. Il ciclo non cerca più le righe né riconosce l'opcode
+confrontando stringhe: legge il codice dall'indice e sceglie l'istruzione con
+uno \texttt{switch}.
 
 \begin{lstlisting}
-char *fw = strtok(skip_lineno(lb), " \t");   /* opcode della riga */
+opc = g_line_index.op[k];                 /* codice dall'indice */
+switch (opc) {
+case OPC_PUSHEQ: vm_x_pusheq(vm, fname, fi, d); break;
+case OPC_MINEQ:  vm_x_mineq (vm, fname, fi, d); break;
+case OPC_XOREQ:  vm_x_xoreq (vm, fname, fi, d); break;
 ...
-else if (!strcmp(fw, "PUSHEQ"))  op_pusheq (vm, fname);
-else if (!strcmp(fw, "MINEQ"))   op_mineq  (vm, fname);
-else if (!strcmp(fw, "XOREQ"))   op_xoreq  (vm, fname);
 \end{lstlisting}
 
 \noindent
-Le etichette di ogni procedura sono raccolte in una prima passata, insieme a
-parametri e dichiarazioni, e un salto porta alla riga dell'etichetta. Gli
-operandi, espressioni comprese, si valutano dal testo a ogni esecuzione. Lo
-stesso ciclo esegue i corpi inversi compilati, che sono bytecode come gli altri;
-l'inversione a tempo di esecuzione è affidata a un secondo percorso
-dell'interprete che legge lo stesso testo all'indietro.
+Una riga eseguita per la prima volta si scompone dal testo. Alla seconda
+esecuzione l'interprete la decodifica e conserva il risultato, per thread:
+operandi già separati e nomi di variabili e di etichette già risolti. Le
+espressioni si compilano una volta in un albero, tenuto in una cache per
+contenuto, e si valutano da quello, non dal testo. Le etichette di ogni
+procedura sono raccolte in una prima passata, insieme a parametri e
+dichiarazioni, e un salto porta alla riga dell'etichetta attraverso l'indice,
+in tempo costante. Lo stesso ciclo esegue i corpi inversi compilati, che sono
+bytecode come gli altri; l'inversione a tempo di esecuzione è affidata a un
+secondo percorso dell'interprete che legge lo stesso testo all'indietro. Niente
+di questo cambia ciò che il programma calcola: la semantica del
+\cref{chap:semantica} resta quella.
 
 \section{Il parallelismo}
 
@@ -2355,7 +2372,8 @@ nemmeno dentro l'interprete: una struttura di servizio comune a tutti i rami
 renderebbe il risultato dipendente dall'ordine in cui i thread vi accedono. Per
 questo ciascuna struttura che un ramo usa è privata del thread, oppure si legge
 senza lock perché non viene mai modificata: lo stato della tokenizzazione è per
-thread, i comandi scritti nel corpo di un ramo usano il frame della procedura
+thread, e lo sono le righe decodificate, le cache delle espressioni e la
+scorta delle variabili intere liberate; i comandi scritti nel corpo di un ramo usano il frame della procedura
 che contiene il \texttt{par} ma ogni ramo ha la propria pila dei
 $\mathtt{local}$ aperti, il controllo delle scritture concorrenti sta nella singola variabile e
 non in un lock globale, e la tabella dei nomi si consulta senza esclusione,
@@ -2368,10 +2386,11 @@ dell'output, che tiene intera la riga di ogni $\mathtt{show}$ anche quando due
 rami stampano nello stesso momento.
 
 Il bytecode è uno solo, letto da tutti i rami. Il programma contiene solo
-istruzioni e nessuno stato --- tutto ciò che cambia durante l'esecuzione sta
-nei frame ---, e l'interprete non lo modifica mai: per eseguire una riga ne
-copia il contenuto in un buffer del thread e scompone quello. Il testo resta
-quindi in sola lettura, e i rami lo condividono senza lock e senza copie.
+istruzioni e nessuno stato: tutto ciò che cambia durante l'esecuzione sta
+nei frame. L'interprete non modifica mai il testo né il suo indice, che i rami
+condividono in sola lettura, senza lock e senza copie. Ciò che un ramo
+ricava da una riga, cioè la sua decodifica, sta in strutture proprie del
+thread e non è condiviso.
 
 \section{Il debugger DAP}
 \label{sec:dap}
@@ -2575,9 +2594,11 @@ indica il punto da migliorare nella parte che resta sequenziale: il raccoglitore
 che riceve dai canali uno per volta. Un raccoglitore ad albero, in cui i
 risultati si combinano a coppie in parallelo, la ridurrebbe.
 
-Nell'interprete il testo del programma è uno solo, condiviso fra i rami. Il
-corpo inverso è prodotto in compilazione per le procedure ricorsive; per le
-altre l'interprete inverte il bytecode a tempo di esecuzione. Ogni attivazione
+Nell'interprete il testo del programma, con il suo indice delle righe, è uno
+solo, condiviso fra i rami. Il corpo inverso è prodotto in compilazione per le
+procedure ricorsive; per le altre l'interprete inverte il bytecode a tempo di
+esecuzione, a meno che non si chieda con \texttt{--compiled-uncall} di
+produrlo in compilazione anche per le procedure senza \texttt{par} né canali. Ogni attivazione
 ricorsiva, e ogni procedura chiamata da un ramo di $\mathtt{par}$, lavora su un
 proprio frame clonato da quello della procedura; i comandi scritti nel corpo
 di un ramo usano il frame della procedura che contiene il $\mathtt{par}$, con

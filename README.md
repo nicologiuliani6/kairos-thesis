@@ -1,7 +1,8 @@
 # Kairos: a reversible and concurrent language
 
-📄 **[Read the thesis (PDF)](http://nicologiuliani.site/kairos-thesis/tesi.pdf)**,
-rebuilt automatically from `main` on every push.
+📄 **[Read the thesis in Italian (PDF)](http://nicologiuliani.site/kairos-thesis/tesi.pdf)**
+· **[Read the thesis in English (PDF)](http://nicologiuliani.site/kairos-thesis/thesis.pdf)**,
+both rebuilt automatically from `main` on every push.
 
 Bachelor's thesis in Computer Science, University of Bologna
 (Dipartimento di Informatica – Scienza e Ingegneria), academic year 2026/2027.
@@ -9,7 +10,8 @@ Bachelor's thesis in Computer Science, University of Bologna
 - **Author:** Nicolò Giuliani
 - **Supervisor:** Prof. Ivan Lanese
 
-The thesis is written in Italian.
+The thesis is written in Italian (`tesi.tex`); the English edition (`thesis.tex`) is a
+translation of it and has the same content.
 
 ## What it is about
 
@@ -46,10 +48,13 @@ The thesis covers:
 
 | File | Content |
 |---|---|
-| `tesi.tex` | main document: abstract, table of contents, bibliography |
-| `frontespizio.tex` | title page |
-| `capitoli.tex` | all chapters |
-| `preambolo.tex` | packages and macros |
+| `tesi.tex` | Italian main document: abstract, table of contents, bibliography |
+| `frontespizio.tex` | Italian title page |
+| `capitoli.tex` | Italian chapters |
+| `thesis.tex` | English main document |
+| `frontespizio-en.tex` | English title page |
+| `capitoli-en.tex` | English chapters |
+| `preambolo.tex` | packages and macros (shared; `\linguatesi` selects the language) |
 | `refs.bib` | bibliography |
 | `img/` | images (university logo) |
 
@@ -57,10 +62,11 @@ The thesis covers:
 
 You need a TeX Live installation with `latexmk`, `pdflatex` and `bibtex`. The
 document uses, among others, `tikz`/`pgfplots`, `listings`, `natbib`,
-`cleveref` and `babel` (Italian).
+`cleveref` and `babel` (Italian and English).
 
 ```bash
-latexmk -pdf tesi.tex      # produces tesi.pdf
+latexmk -pdf tesi.tex      # produces tesi.pdf (Italian)
+latexmk -pdf thesis.tex    # produces thesis.pdf (English)
 latexmk -c                 # removes the auxiliary files
 ```
 

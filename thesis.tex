@@ -1,0 +1,81 @@
+% ======================================================================
+%  Kairos - a reversible and concurrent language (English edition)
+%  Bachelor's thesis, Nicolò Giuliani
+%
+%  Struttura aderente al modello DISI di CartaBinaria:
+%  https://github.com/cartabinaria/latex-thesis
+%
+%  File:  preambolo.tex     pacchetti del modello + notazione propria
+%         frontespizio.tex  copertina, parole chiave, dedica
+%         capitoli.tex      the body of the thesis
+%         refs.bib          bibliografia (natbib)
+% ======================================================================
+\documentclass[12pt,a4paper,twoside]{book}
+
+\newcommand{\linguatesi}{english}
+\input{preambolo}
+
+\begin{document}
+
+\input{frontespizio-en}
+
+\pagenumbering{gobble}
+
+\chapter*{Abstract}
+Kairos is a \emph{reversible} and \emph{concurrent} programming language,
+inspired by Janus~\cite{YokoyamaGluck2007} and extended to express concurrent
+problems. Every Kairos program can be executed both forwards and backwards, and
+its inverse is computed from the program text. The language offers explicit
+parallelism, synchronous communication over typed channels and transactions
+with compensation.
+
+This thesis gives its structural operational semantics in small-step style,
+defined as an extension of the semantics of Janus by Lami, Lanese and
+Stefani~\cite{LamiLaneseStefani2024}, and the inversion operator that realises
+backward execution. On channels we adopt a binary session discipline, checked
+during execution, which allows delegation, that is, the passing of a channel
+from one holder to another.
+The language is implemented by an interpreter, with a debugger that runs the
+program one step at a time, forwards and backwards. A case study, the
+reversible Burrows--Wheeler transform with the blocks transformed in
+parallel, measures its cost and the speedup obtained from concurrency.
+
+\topmargin=-1cm
+\tableofcontents
+\thispagestyle{empty}
+\listoftables
+\thispagestyle{empty}
+\newpage~\newpage
+
+\pagenumbering{arabic}
+\setcounter{chapter}{-1}   % the template numbers the introduction as chapter 0
+\raggedbottom
+\pagestyle{plain}
+\setcounter{page}{1}
+
+\input{capitoli-en}
+
+% ======================================================================
+%  Bibliografia
+% ======================================================================
+\renewcommand{\bibsection}{}
+\chapter*{References}
+\addcontentsline{toc}{chapter}{References}
+\bibliography{refs}
+\newpage
+
+% ======================================================================
+%  Appendici — nessuna, per ora.
+%  Il modello le prevede; per riaggiungerle basta:
+%      \renewcommand{\appendixtocname}{Appendici}
+%      \renewcommand{\appendixpagename}{Appendici}
+%      \pagenumbering{gobble}
+%      \begin{appendices} \chapter{...} ... \end{appendices}
+% ======================================================================
+\pagenumbering{gobble}
+
+\newpage~\newpage
+\chapter*{Acknowledgements}
+\textcolor{gray}{[acknowledgements]}
+
+\end{document}

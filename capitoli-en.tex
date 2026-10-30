@@ -1841,18 +1841,18 @@ can, and this is the contribution of this chapter.
 \section{What changes when writing it in Kairos}
 
 Compression algorithms work by index, and access by index is direct:
-\texttt{blocco[j]} reads cell $j$ without consuming it and without touching the
+\texttt{block[j]} reads cell $j$ without consuming it and without touching the
 others, as in the reference work.
 
 \begin{lstlisting}
-procedure car(int blocco[], int n, int off, int k, int c)
+procedure char_at(int block[], int n, int off, int k, int c)
     local int j = 0
         j += off
         j += k
         if j >= n then
             j -= n
         fi j < off
-        c += blocco[j]
+        c += block[j]
         if j < off then
             j += n
         fi j >= n
@@ -1865,7 +1865,7 @@ procedure car(int blocco[], int n, int off, int k, int c)
 The $k$-th character of the rotation starting at $\mathit{off}$ is at
 position $(\mathit{off}+k) \bmod n$. With the \texttt{\%} operator it would be
 enough to write
-$c \mathbin{+\!\!=} \mathit{blocco}[(\mathit{off}+k) \bmod n]$, which is
+$c \mathbin{+\!\!=} \mathit{block}[(\mathit{off}+k) \bmod n]$, which is
 reversible because the index depends only on variables that the command does not
 modify. The listing instead keeps the explicit correction, because it shows how
 to make reversible a step that in itself loses information: $j$ is a
@@ -1919,21 +1919,21 @@ the column is copied into a stack and this travels in one go together with the
 index.
 
 \begin{lstlisting}
-procedure lavoratore(int blocco[], int offs[], int out[], stack scarto,
-                     stack colonna, channel c, int n)
+procedure worker(int block[], int offs[], int out[], stack scratch,
+                 stack column, channel c, int n)
     local int idx = 0
-        call ordina(offs, blocco, scarto, n)
-        call estrai(offs, blocco, out, n, idx)
+        call sort(offs, block, scratch, n)
+        call extract(offs, block, out, n, idx)
         // copy of the column into the stack that travels on the channel
-        ssend(<idx, colonna>, c)
+        ssend(<idx, column>, c)
     delocal int idx = 0
 
 par
-    call lavoratore(b0, offs0, out0, sc0, st0, c0, n)
+    call worker(b0, offs0, out0, sc0, st0, c0, n)
 and
-    call lavoratore(b1, offs1, out1, sc1, st1, c1, n)
+    call worker(b1, offs1, out1, sc1, st1, c1, n)
 and
-    call raccoglitore(c0, c1, col0, col1, indici)
+    call collector(c0, c1, col0, col1, indices)
 rap
 \end{lstlisting}
 
@@ -2028,12 +2028,12 @@ branches of a single \texttt{par}, with the collector as the last branch.
 \textbf{Sequential}
 \begin{lstlisting}
 par
-    call lavoratore(b1, ..., c1, n)
+    call worker(b1, ..., c1, n)
 and
     srecv(<i1, col1>, c1)
 rap
 par
-    call lavoratore(b2, ..., c2, n)
+    call worker(b2, ..., c2, n)
 and
     srecv(<i2, col2>, c2)
 rap
@@ -2045,11 +2045,11 @@ rap
 \textbf{Parallel}
 \begin{lstlisting}
 par
-    call lavoratore(b1, ..., c1, n)
+    call worker(b1, ..., c1, n)
 and
-    call lavoratore(b2, ..., c2, n)
+    call worker(b2, ..., c2, n)
 and
-    call raccoglitore(c1, c2, col1, col2, indici)
+    call collector(c1, c2, col1, col2, indices)
 rap
 \end{lstlisting}
 \end{minipage}
@@ -2162,7 +2162,7 @@ Consider a procedure that sums the first $n$ integers, with the two-body loop
 (\cref{sec:loop}):
 
 \begin{lstlisting}
-procedure somma(int n, int s)
+procedure sum(int n, int s)
     local int i = 0
     from i == 0 do
         s += i
@@ -2178,7 +2178,7 @@ expressions: an identifier is recognized and then looked up in a table of reserv
 words, so adding a new one costs a single line.
 
 \begin{lstlisting}
-PROCEDURE ID(somma) LPAREN INT ID(n) COMMA INT ID(s) RPAREN
+PROCEDURE ID(sum) LPAREN INT ID(n) COMMA INT ID(s) RPAREN
 LOCAL INT ID(i) EQUALS NUMBER(0)
 FROM ID(i) EQEQ NUMBER(0) DO
   ID(s) PLUSEQUALS ID(i)
@@ -2208,7 +2208,7 @@ line number (conditions do not), and the \code{from} carries two, followed
 by the \code{loop} body.
 
 \begin{lstlisting}
-('procedure', 'somma', [('int','n'), ('int','s')],
+('procedure', 'sum', [('int','n'), ('int','s')],
  [('local', 'int', 'i', 0, 2),
   ('from', ('cond','==','i',0),          // entry guard
            [('assign','s','+=','i',4)],  // do body
@@ -2226,7 +2226,7 @@ the corresponding body is empty.
 arguments.
 
 \begin{lstlisting}
-@1   PROC somma
+@1   PROC sum
 @1   PARAM int n
 @1   PARAM int s
 @2   LOCAL int i 0
@@ -2242,7 +2242,7 @@ arguments.
 @7   LABEL FROM_END_5
 @7   LABEL FROM_ERR_5
 @8   DELOCAL int i n
-@1   END_PROC somma
+@1   END_PROC sum
 \end{lstlisting}
 
 \noindent

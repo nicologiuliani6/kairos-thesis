@@ -1081,8 +1081,10 @@ types}~\cite{HondaYoshidaCarbone2008}).
 La titolarità è \textbf{stato d'esecuzione}, non una proprietà del testo del
 programma, e può cambiare durante l'esecuzione. Un ramo diventa titolare quando
 usa il canale o quando lo riceve come payload di un altro canale, e smette di
-esserlo quando lo spedisce a un terzo o quando il ramo termina: due
-$\mathtt{par}$ in sequenza sullo stesso canale hanno così titolari nuovi. Da questa sola regola discendono, senza
+esserlo quando lo spedisce a un terzo o quando il $\mathtt{par}$ che lo
+contiene fa il join dei suoi rami: la titolarità dura quanto il $\mathtt{par}$,
+non quanto il singolo ramo. Due $\mathtt{par}$ in sequenza sullo stesso canale
+hanno comunque titolari nuovi. Da questa sola regola discendono, senza
 casi particolari, i due modi in cui un canale si passa:
 
 \begin{itemize}
@@ -1449,9 +1451,11 @@ ricevente, non del canale.
 \textbf{Violazioni della sessione binaria.} Il vincolo di \S\ref{sec:chan} è
 una condizione sull'esecuzione, e si viola in due modi, entrambi con esito
 $\err$. Il primo è un \textbf{terzo titolare}: un ramo tocca un canale che ha
-già due titolari ancora in esecuzione. Con tre rami vivi sullo stesso canale il
-partner di un'offerta non è più determinato, e l'interprete si ferma subito
-invece di aspettare che uno dei due termini.
+già due titolari nel $\mathtt{par}$ in corso, anche se il ramo di uno dei due è
+già terminato. Con tre rami dello stesso $\mathtt{par}$ sullo stesso canale il
+partner di un'offerta non è più determinato, e l'interprete si ferma subito,
+qualunque sia l'ordine in cui i rami avanzano, invece di riuscire o fallire a
+seconda di chi termina per primo.
 Il secondo è lo \textbf{stallo}: nessun ramo del programma può più avanzare,
 perché ognuno ha finito, è fermo in attesa su canale o aspetta i rami di un
 $\mathtt{par}$ annidato. Il caso più semplice è un $\mathtt{ssend}$ o un

@@ -1074,8 +1074,10 @@ types}~\cite{HondaYoshidaCarbone2008}).
 Holdership is \textbf{execution state}, not a property of the program
 text, and it may change during execution. A branch becomes a holder when it
 uses the channel or when it receives it as the payload of another channel, and it stops
-being one when it sends it to a third party or when the branch terminates: two
-$\mathtt{par}$ in sequence on the same channel thus have new holders. From this single rule follow, without
+being one when it sends it to a third party or when the enclosing
+$\mathtt{par}$ joins its branches: holdership lasts as long as the
+$\mathtt{par}$, not as long as a single branch. Two $\mathtt{par}$ in sequence
+on the same channel still have new holders. From this single rule follow, without
 special cases, the two ways in which a channel is passed on:
 
 \begin{itemize}
@@ -1442,9 +1444,11 @@ receiver, not the channel.
 \textbf{Violations of the binary session.} The constraint of \S\ref{sec:chan} is
 a condition on execution, and it can be violated in two ways, both with outcome
 $\err$. The first is a \textbf{third holder}: a branch touches a channel that has
-already two holders still running. With three live branches on the same channel the
-partner of an offer is no longer determined, and the interpreter stops immediately
-instead of waiting for one of the two to terminate.
+already two holders in the current $\mathtt{par}$, even if the branch of one of
+them has already terminated. With three branches of the same $\mathtt{par}$ on the
+same channel the partner of an offer is no longer determined, and the interpreter
+stops immediately, whatever the order in which the branches advance, instead of
+succeeding or failing depending on which one terminates first.
 The second is \textbf{deadlock}: no branch of the program can advance any more,
 because each has finished, is stopped waiting on a channel, or is waiting for the branches of a
 nested $\mathtt{par}$. The simplest case is an $\mathtt{ssend}$ or an

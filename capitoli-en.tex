@@ -2017,9 +2017,8 @@ rotations, and each comparison scans $O(n)$ characters, each read in
 constant time.
 
 \paragraph{Concurrency.} The same computation in two variants that differ in
-a single point, the procedure that orchestrates the blocks. In the first each block sits
-in a \texttt{par} of its own, together with only the reception of its own result: the
-worker and its receiver proceed together, but the blocks follow one another, and
+a single point, the procedure that orchestrates the blocks. In the first the blocks
+are transformed one after another, with no \texttt{par} and no channel, so
 there is no parallelism \emph{between} blocks. In the second all the workers are
 branches of a single \texttt{par}, with the collector as the last branch.
 \begin{center}
@@ -2027,16 +2026,8 @@ branches of a single \texttt{par}, with the collector as the last branch.
 \centering
 \textbf{Sequential}
 \begin{lstlisting}
-par
-    call worker(b1, ..., c1, n)
-and
-    srecv(<i1, col1>, c1)
-rap
-par
-    call worker(b2, ..., c2, n)
-and
-    srecv(<i2, col2>, c2)
-rap
+call worker(b1, ..., col1, i1, n)
+call worker(b2, ..., col2, i2, n)
 \end{lstlisting}
 \end{minipage}
 \hfill
@@ -2054,6 +2045,13 @@ rap
 \end{lstlisting}
 \end{minipage}
 \end{center}
+
+\noindent
+The sequential listing uses a different implementation of \texttt{worker}, which has
+no channel and carries its result out through a variable of the worker itself: the index in
+the variable \texttt{idx} that it receives as a parameter (\texttt{i1}, \texttt{i2}), and
+the column in the stack it is given (\texttt{col1}, \texttt{col2}), instead of sending
+them with $\mathtt{ssend}$. The rest of the body is identical.
 
 With blocks of $n=20$ symbols, the speedup of the parallelized version
 over the sequential one is the one in the table (median of three

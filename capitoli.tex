@@ -2023,26 +2023,17 @@ rotazioni, e ciascun confronto ne scandisce $O(n)$ caratteri, ciascuno letto in
 tempo costante.
 
 \paragraph{Concorrenza.} Lo stesso calcolo in due varianti che differiscono in
-un solo punto, la procedura che orchestra i blocchi. Nella prima ogni blocco sta
-in un \texttt{par} a sé, insieme alla sola ricezione del proprio risultato: il
-lavoratore e il suo ricevente procedono insieme, ma i blocchi si susseguono, e
+un solo punto, la procedura che orchestra i blocchi. Nella prima i blocchi
+sono trasformati uno dopo l'altro, senza \texttt{par} e senza canali, quindi
 non c'è parallelismo \emph{fra} blocchi. Nella seconda tutti i lavoratori sono
-rami di un unico \texttt{par}, con il raccoglitore come ultimo ramo. 
+rami di un unico \texttt{par}, con il raccoglitore come ultimo ramo.
 \begin{center}
 \begin{minipage}[t]{0.48\textwidth}
 \centering
 \textbf{Sequenziale}
 \begin{lstlisting}
-par
-    call lavoratore(b1, ..., c1, n)
-and
-    srecv(<i1, col1>, c1)
-rap
-par
-    call lavoratore(b2, ..., c2, n)
-and
-    srecv(<i2, col2>, c2)
-rap
+call lavoratore(b1, ..., col1, i1, n)
+call lavoratore(b2, ..., col2, i2, n)
 \end{lstlisting}
 \end{minipage}
 \hfill
@@ -2060,6 +2051,13 @@ rap
 \end{lstlisting}
 \end{minipage}
 \end{center}
+
+\noindent
+Il listato sequenziale usa un'altra implementazione di \texttt{lavoratore}, senza
+canale, che porta via il risultato con una variabile del lavoratore stesso: l'indice
+nella variabile \texttt{idx} che riceve come parametro (\texttt{i1}, \texttt{i2}), e
+la colonna nello stack che gli viene passato (\texttt{col1}, \texttt{col2}), invece di
+inviarli con $\mathtt{ssend}$. Il resto del corpo è identico.
 
 Con blocchi di $n=20$ simboli, il guadagno della versione parallelizzata
 rispetto a quella sequenziale è quello della tabella (mediana di tre
